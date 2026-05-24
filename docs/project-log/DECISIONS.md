@@ -15,3 +15,4 @@
 | systematic-debugging is active globally in Claude Code | accepted | Recovery/debug must stop repeated blind retries | Use for failures and repeated errors |
 | writing-plans is active globally in Claude Code | accepted | Multi-file tasks need short verifiable steps | Use for collector design and Codex packages |
 | vibesec is active globally in Claude Code | accepted | Exporter/API/runtime boundaries need security review | Use before security-sensitive production work |
+| Tinyserver MVP route is stored as repo workpack | accepted | The route to MVP must survive dialog changes and Claude Code limits | Use docs/workpacks/TASK-TINYSERVER-MVP-000 as the master route |
