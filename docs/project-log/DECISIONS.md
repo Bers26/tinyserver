@@ -9,3 +9,6 @@
 | Numeric semantics before collectors | accepted | Avoid ad-hoc state codes | Add telemetry numeric spec before network.link.ro |
 | Prometheus prefix agent_ro_ plus contour label | accepted | Dashboards should work across contours | Use contour label serverguard |
 | Next-dialog instruction is stored as mono-md in repo | accepted | Future dialogs need one compact bootstrap source | Read NEXT_DIALOG_INSTRUCTIONS.md at start |
+| Claude Code uses CLAUDE.md | accepted | Claude Code is a mandatory executor for local/repo/runtime work | Root CLAUDE.md becomes required context |
+| Claude Code skills policy is active | accepted | systematic-debugging, writing-plans, vibesec, constrained yeet and gh-fix-ci improve reliability | Skills are recorded in CLAUDE.md and SKILLS_REGISTRY.md |
+| openai/yeet is constrained by project protocol | accepted | Automated shipping must not bypass rc-gated checks or explicit SSH key | Use only if it preserves executor discipline |

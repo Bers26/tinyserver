@@ -11,3 +11,4 @@
 | 2026-05-24 | SGTS-033 | project log | Verified ERRORS, PREVENTION_RULES, DECISIONS, TASKS | OK | Finalize instruction for next dialogs |
 | 2026-05-24 | SGTS-035 | project log | Failed to create mono instruction because shell quoting broke Python string | FAIL | Recovery-aware rewrite |
 | 2026-05-24 | SGTS-036 | project log | Added mono instruction for next dialogs | IN PROGRESS | Commit and push |
+| 2026-05-24 | SGTS-040 | Claude Code skills | Added CLAUDE.md and active skills policy | IN PROGRESS | Commit and push |
