@@ -14,4 +14,5 @@
 | TASK-SG-DESIGN-001A | 1 | Add canonical numeric semantics to tiny-agent-framework | GitHub connector | done | docs/runtime/telemetry-numeric-semantics-v0.1.md merged in 50e9654 | tinyserver adoption |
 | TASK-SG-DESIGN-001B | 1 | Adopt canonical numeric semantics in tinyserver | GitHub connector | done | docs/runtime/telemetry-numeric-semantics.md merged in 98d14c3 | Prometheus projection |
 | TASK-SG-DESIGN-002 | 1 | Add Prometheus projection spec in tinyserver | GitHub connector | done | docs/runtime/prometheus-projection.md merged in eaccd47 | network.link design |
-| TASK-SG-DESIGN-003 | 1 | Design network.link.ro from real read-only network state | Claude Code | blocked-by-claude-limit | Needs live read-only network inspect before accepted design | wait for Claude Code or run manual read-only inspect |
+| TASK-SG-DESIGN-003A | 1 | Add network.link.ro draft design skeleton | GitHub connector | active | docs/collectors/network-link.md created as DRAFT pending factual inspect | factual inspect |
+| TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | Claude Code | blocked-by-claude-limit | Requires factual state and accepted field/state mapping | wait for Claude Code |
