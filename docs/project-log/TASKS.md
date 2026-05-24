@@ -15,5 +15,5 @@
 | TASK-SG-DESIGN-001B | 1 | Adopt canonical numeric semantics in tinyserver | GitHub connector | done | docs/runtime/telemetry-numeric-semantics.md merged in 98d14c3 | Prometheus projection |
 | TASK-SG-DESIGN-002 | 1 | Add Prometheus projection spec in tinyserver | GitHub connector | done | docs/runtime/prometheus-projection.md merged in eaccd47 | network.link design |
 | TASK-SG-DESIGN-003A | 1 | Add network.link.ro draft design skeleton | GitHub connector | done | docs/collectors/network-link.md merged in 2ee0cbd | factual inspect |
-| TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | GitHub connector | active | docs/collectors/network-link.md updated from SGTS-067 facts | Codex collector package |
-| TASK-SG-CODEX-001 | 2 | Implement network.link.ro collector and tests | Codex | queued | Requires accepted design and no runtime wiring | prepare Codex package |
+| TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | GitHub connector | done | docs/collectors/network-link.md merged in 13342cc | Codex collector package |
+| TASK-SG-CODEX-001 | 2 | Implement network.link.ro collector and tests | Codex | ready | docs/workpacks/TASK-SG-CODEX-001/README.md prepared | run Codex package |
