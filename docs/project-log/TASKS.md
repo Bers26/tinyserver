@@ -10,4 +10,6 @@
 | TASK-NEXT-DIALOG-001 | 1 | Add mono instruction for next dialogs | Claude Code | done | NEXT_DIALOG_INSTRUCTIONS.md committed and pushed in 93ea63b | none |
 | TASK-AGENTS-001 | 1 | Add CLAUDE.md and Claude Code skills policy | Claude Code | done | CLAUDE.md/AGENTS.md pushed; systematic-debugging, writing-plans and vibesec installed active globally | numeric semantics |
 | TASK-SKILLS-INSTALL-001 | 1 | Install required Claude Code skills | Claude Code | done | systematic-debugging, writing-plans and vibesec installed active globally | none |
-| TASK-TINYSERVER-MVP-000A | 1 | Create Tinyserver MVP workpack | GitHub connector | active | docs/workpacks/TASK-TINYSERVER-MVP-000 exists and PR opened | review/merge workpack |
+| TASK-TINYSERVER-MVP-000A | 1 | Create Tinyserver MVP workpack | GitHub connector | done | docs/workpacks/TASK-TINYSERVER-MVP-000 merged in 7671f93 | numeric semantics adoption |
+| TASK-SG-DESIGN-001A | 1 | Add canonical numeric semantics to tiny-agent-framework | GitHub connector | done | docs/runtime/telemetry-numeric-semantics-v0.1.md merged in 50e9654 | tinyserver adoption |
+| TASK-SG-DESIGN-001B | 1 | Adopt canonical numeric semantics in tinyserver | GitHub connector | active | docs/runtime/telemetry-numeric-semantics.md created and PR opened | Prometheus projection |
