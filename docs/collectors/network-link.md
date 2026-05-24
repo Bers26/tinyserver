@@ -1,13 +1,14 @@
 # network.link.ro design
 
-Status: DRAFT pending live read-only network inspect.
+Status: ACCEPTED DESIGN, pending implementation.
 Created: 2026-05-24.
+Accepted from factual inspect: SGTS-067.
 
 ## Purpose
 
 `network.link.ro` is the first ServerGuard expansion stream after the v0.1 baseline streams.
 
-It must describe local link, gateway and basic DNS/WAN reachability without mutating networking, VPN, Docker, DHCP, routing or system services.
+It describes local link, gateway and basic DNS/WAN reachability without mutating networking, VPN, Docker, DHCP, routing or system services.
 
 ## Canonical dependencies
 
@@ -17,66 +18,54 @@ Bers26/tinyserver: docs/runtime/telemetry-numeric-semantics.md
 Bers26/tinyserver: docs/runtime/prometheus-projection.md
 ```
 
-## Status boundary
+## Factual inspect summary
 
-This file is not an accepted implementation design yet.
+SGTS-067 collected current facts from the server.
 
-It becomes accepted only after live read-only network inspect confirms:
-
-```text
-primary interface name
-route/gateway shape
-available local commands
-DNS check method
-VPN diagnostic hints that are safe to read
-expected output paths and runtime registry target
-```
-
-## Required read-only inspect
-
-Executor: Claude Code or manual SSH block while Claude Code is unavailable.
-
-Forbidden during inspect:
+Observed baseline:
 
 ```text
-network restart
-VPN switch
-DHCP changes
-routing changes
-systemd changes
-Docker changes
-valid action token
-/api/actions/*
-secrets/.env
+host=agent
+primary_interface=enp6s0
+primary_gateway=10.1.1.1
+default_route=default via 10.1.1.1 dev enp6s0 proto static
+address=10.1.1.10/24
+operstate=up
+carrier=1
+speed_mbps=100
+duplex=full
+mtu=1500
+rx_errors=0
+tx_errors=4
+rx_dropped=0
+tx_dropped=0
+gateway_ping_60_packets=0_percent_loss
+external_ping_1.1.1.1_10_packets=0_percent_loss
+dns_github_rc=0
+dns_google_rc=2
+dns_telegram_rc=0
+resolver_primary_enp6s0=1.1.1.1
+resolver_enp6s0_servers=10.1.1.1,1.1.1.1,8.8.8.8
+vpn_interface=tun0
+vpn_dns=172.19.0.2
+systemd_networkd=active
+systemd_resolved=active
+NetworkManager=inactive
 ```
 
-Facts to capture:
+Important caveat:
 
 ```text
-hostname
-kernel/network tools availability
-ip -json link
-ip -json addr
-ip route
-resolvectl status or /etc/resolv.conf summary
-primary interface
-primary gateway
-default route device
-carrier
-operstate
-speed_mbps
-duplex
-rx_errors
-tx_errors
-rx_dropped
-tx_dropped
-gateway ping result and latency
-DNS resolve result for fixed safe domains
-VPN interface hints if visible without secrets
-current Agent RO registry truth
+Earlier long-running pings showed intermittent local packet loss:
+Windows -> 10.1.1.1: about 4 percent loss, max latency about 3903 ms
+Windows -> 10.1.1.10: about 4 percent loss, max latency about 3494 ms
+server -> 10.1.1.1 earlier sample: about 25.88 percent loss
+SGTS-067 short bounded sample later showed 0 percent loss to gateway.
 ```
 
-## Candidate stream id
+Conclusion: the collector must detect intermittent degradation, not only current link-down state.
+
+## Stream identity
 
 ```text
 agent_id: network.link.ro
@@ -84,9 +73,11 @@ stream: network.link
 contour: serverguard
 ```
 
-Current framework v0.1 still stores stream identity as `agent_id` in snapshots. Prometheus may expose it as `stream="network.link"`.
+Current framework v0.1 stores stream identity as `agent_id`. Prometheus may expose it as `stream="network.link"`.
 
-## Candidate collector facts
+## Accepted collector facts
+
+Required facts:
 
 ```text
 interface
@@ -103,11 +94,21 @@ gateway_ip_present
 gateway_ip_present_value
 gateway_ping_ok
 gateway_ping_ok_value
-gateway_ping_ms
+gateway_ping_ms_min
+gateway_ping_ms_avg
+gateway_ping_ms_max
+gateway_ping_loss_percent
 dns_ok
 dns_ok_value
 dns_checked_domains_count
 dns_success_count
+dns_github_ok_value
+dns_google_ok_value
+dns_telegram_ok_value
+vpn_interface_present
+vpn_interface_present_value
+vpn_dns_present
+vpn_dns_present_value
 wan_hint
 vpn_hint
 ```
@@ -129,28 +130,30 @@ operation_state
 operation_state_code
 ```
 
-## Candidate state mapping
-
-Initial mapping, pending live inspect:
+## Accepted state mapping
 
 ```text
 OK:
   carrier=true
   operstate=up
+  gateway_ping_loss_percent=0
   gateway_ping_ok=true
-  dns_ok=true
+  dns_success_count>=1
 
 WARN:
-  carrier=true and operstate=up, but DNS fails
-  carrier=true and gateway ping fails, but DNS still works
-  link speed lower than expected but usable
-  rx/tx errors or drops increased above small threshold
+  carrier=true and operstate=up, but dns_success_count=0
+  carrier=true and gateway_ping_loss_percent>0 and <=5
+  gateway_ping_ms_max>=100 and <1000
+  speed_mbps is lower than expected but link is usable
+  tx_errors/rx_errors increased but gateway and DNS still mostly work
 
 BAD:
   carrier=false
   operstate=down
   no default gateway
+  gateway_ping_loss_percent>5
   gateway ping fails and DNS fails
+  gateway_ping_ms_max>=1000 in the sampled window
 
 UNKNOWN:
   required commands unavailable
@@ -164,15 +167,13 @@ STALE:
   latest sample exists but freshness policy expired
 ```
 
-## Severity mapping
-
-Initial mapping, pending live inspect:
+## Accepted severity mapping
 
 ```text
 normal=0 for OK
 warning=2 for WARN
-degraded=3 for BAD-but-local-link-present
-critical=4 for no carrier or no default route
+degraded=3 for BAD with carrier still present
+critical=4 for no carrier, no default route, or heavy gateway loss
 unknown_or_error=5 for UNKNOWN/ERROR
 ```
 
@@ -196,7 +197,9 @@ freshness must show stale/expired when applicable
 
 ## Prometheus projection
 
-Expected metrics are defined in `docs/runtime/prometheus-projection.md`:
+Expected metrics are defined in `docs/runtime/prometheus-projection.md`.
+
+Required network metrics:
 
 ```text
 agent_ro_network_carrier_value
@@ -207,7 +210,10 @@ agent_ro_network_rx_dropped_total
 agent_ro_network_tx_dropped_total
 agent_ro_network_gateway_ping_ok_value
 agent_ro_network_gateway_ping_ms
+agent_ro_network_gateway_ping_loss_percent
 agent_ro_network_dns_ok_value
+agent_ro_network_dns_success_count
+agent_ro_network_vpn_interface_present_value
 ```
 
 Required base metrics:
@@ -222,15 +228,18 @@ agent_ro_age_seconds
 
 ## Codex package gate
 
-Do not write collector code until:
+Collector code may be drafted after this accepted design.
+
+Codex package must include:
 
 ```text
-live inspect accepted
-field list accepted
-state mapping accepted
-runtime target accepted
-fixtures planned
-rollback plan ready
+collector source
+unit tests for state mapping
+fixtures for OK, WARN, BAD, UNKNOWN, ERROR
+no runtime wiring
+no secrets
+no network mutation
+no Docker/VPN/systemd control
 ```
 
 ## Runtime gate
@@ -246,4 +255,4 @@ full rollback plan ready
 
 ## Next step
 
-Run live read-only network inspect and update this file from DRAFT to ACCEPTED DESIGN only if facts support it.
+Create Codex package for `network.link.ro` collector and tests.
