@@ -8,4 +8,5 @@
 | TASK-TINY-INIT-001 | 1 | Create and push initial commit | Claude Code | done | Commit 6a5bc73 pushed to origin/main | none |
 | TASK-PROJECT-LOG-001 | 1 | Add repo-native project log | Claude Code | done | docs/project-log committed and pushed in 1d02c9d | maintain before work |
 | TASK-NEXT-DIALOG-001 | 1 | Add mono instruction for next dialogs | Claude Code | active | NEXT_DIALOG_INSTRUCTIONS.md committed and pushed | continue with numeric semantics |
-| TASK-AGENTS-001 | 1 | Add CLAUDE.md and Claude Code skills policy | Claude Code | active | CLAUDE.md and AGENTS.md updated and pushed | numeric semantics |
+| TASK-AGENTS-001 | 1 | Add CLAUDE.md and Claude Code skills policy | Claude Code | done | CLAUDE.md/AGENTS.md pushed; systematic-debugging, writing-plans and vibesec installed active globally | numeric semantics |
+| TASK-SKILLS-INSTALL-001 | 1 | Install required Claude Code skills | Claude Code | done | systematic-debugging, writing-plans and vibesec installed active globally | none |
