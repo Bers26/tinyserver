@@ -20,12 +20,12 @@ CLAUDE.md and AGENTS.md updated
 systematic-debugging installed active global
 writing-plans installed active global
 vibesec installed active global
+TASK-NEXT-DIALOG-001 closed in project-log
 ```
 
 ## Open items
 
 ```text
-TASK-NEXT-DIALOG-001 status should be closed in project-log
 TASK-TINYSERVER-MVP-000A workpack PR must be reviewed/merged
 TASK-SG-DESIGN-001A canonical numeric semantics in tiny-agent-framework
 TASK-SG-DESIGN-001B tinyserver adoption doc
