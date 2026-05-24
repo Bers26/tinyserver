@@ -10,7 +10,7 @@
 | 2026-05-24 | SGTS-028 | project log | Moved primary operational log into repo markdown | OK | Verify log contents |
 | 2026-05-24 | SGTS-033 | project log | Verified ERRORS, PREVENTION_RULES, DECISIONS, TASKS | OK | Finalize instruction for next dialogs |
 | 2026-05-24 | SGTS-035 | project log | Failed to create mono instruction because shell quoting broke Python string | FAIL | Recovery-aware rewrite |
-| 2026-05-24 | SGTS-036 | project log | Added mono instruction for next dialogs | IN PROGRESS | Commit and push |
-| 2026-05-24 | SGTS-040 | Claude Code skills | Added CLAUDE.md and active skills policy | IN PROGRESS | Commit and push |
+| 2026-05-24 | SGTS-036 | project log | Added mono instruction for next dialogs | OK | Add Claude Code policy |
 | 2026-05-24 | SGTS-040 | Claude Code skills | Added CLAUDE.md and active skills policy | OK | Install/verify skills |
-| 2026-05-24 | SGTS-044 | Claude Code skills | Recorded installed active global skills | IN PROGRESS | Commit and push |
+| 2026-05-24 | SGTS-044 | Claude Code skills | Recorded installed active global skills | OK | Continue to MVP workpack |
+| 2026-05-24 | SGTS-054 | MVP planning | Created Tinyserver MVP workpack branch through GitHub connector | IN PROGRESS | Open PR |
