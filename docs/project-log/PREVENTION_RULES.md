@@ -8,3 +8,4 @@
 | Set local git identity before first commit | active | new repos | Avoid global config changes and commit failure |
 | No long heredoc/prose dumps in executor blocks | active | SSH executor | Prevent shell continuation prompt and broken paste |
 | Read ERRORS.md and PREVENTION_RULES.md before technical work | active | ServerGuard/Tiny Server | Avoid repeated mistakes |
+| Avoid shell-wrapped Python content that contains raw single quotes | active | generated docs in executor blocks | Prevent unterminated string failures |

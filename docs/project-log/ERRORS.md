@@ -9,3 +9,4 @@
 | E-SGTS-021 | SGTS-021 | Google Sheet not updated after result | Logging treated as optional | Project trace lagged | Move primary log to repo | Operational log must be updated in repo |
 | E-SGTS-022 | SGTS-022 | Google Sheet batch failed on invalid sheet index | Tried reindex before sheets existed | Logging update failed | Stop relying on Sheets | Create structure in repo markdown |
 | E-HEREDOC | prior | Long heredoc/prose blocks caused shell continuation prompts | Fragile paste workflow | Interrupted sessions | Avoid long heredoc | Use small files, repo patches, or bounded scripts |
+| E-SGTS-035 | SGTS-035 | Python string broke because shell single quote appeared inside generated text | Python code was wrapped in single quotes and content included quoted LESS value | Instruction file was not created | Recovery block avoids inner single quote in shell-wrapped Python | Avoid shell-wrapped Python content that contains raw single quotes |
