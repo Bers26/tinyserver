@@ -14,3 +14,13 @@
 | 2026-05-24 | SGTS-040 | Claude Code skills | Added CLAUDE.md and active skills policy | OK | Install/verify skills |
 | 2026-05-24 | SGTS-044 | Claude Code skills | Recorded installed active global skills | OK | Continue to MVP workpack |
 | 2026-05-24 | SGTS-054 | MVP planning | Created Tinyserver MVP workpack branch through GitHub connector | IN PROGRESS | Open PR |
+| 2026-05-25 | SGTS-090 | network.link.ro | CLI smoke passed with PYTHONPATH=src | OK | framework wrapper |
+| 2026-05-25 | SGTS-101 | network.link.ro | Framework snapshot wrapper tested and branch pushed | OK | PR #14 |
+| 2026-05-25 | SGTS-110 | ServerGuard consumer | Full Agent RO registry consumer PR #4 merged | OK | live sync |
+| 2026-05-25 | SGTS-113 | ServerGuard consumer | Live consumer saw all 3 agents from full registry | OK | transient ping smoothing |
+| 2026-05-25 | SGTS-122 | network.link.ro | PR #15 merged to soften transient gateway ping loss | OK | live sync |
+| 2026-05-25 | SGTS-124 | network.link.ro | PR #15 synced live; runtime smoke and consumer proof passed | OK | checks dict |
+| 2026-05-25 | SGTS-128 | ServerGuard consumer | PR #5 merged to preserve checks dict | OK | live sync |
+| 2026-05-25 | SGTS-129 | ServerGuard consumer | PR #5 synced live; checks dict preserved | OK | producer checks |
+| 2026-05-25 | SGTS-133 | network.link.ro | PR #16 merged to add network checks dict | OK | live sync |
+| 2026-05-25 | SGTS-134 | network.link.ro | Live latest and ServerGuard consumer show keyed network checks dict | OK | Prometheus exporter |
