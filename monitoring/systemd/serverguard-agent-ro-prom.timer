@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh ServerGuard Agent RO Prometheus textfile
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=serverguard-agent-ro-prom.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target
