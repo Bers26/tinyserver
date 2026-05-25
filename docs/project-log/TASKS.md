@@ -17,6 +17,12 @@
 | TASK-SG-DESIGN-003A | 1 | Add network.link.ro draft design skeleton | GitHub connector | done | docs/collectors/network-link.md merged in 2ee0cbd | factual inspect |
 | TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | GitHub connector | done | docs/collectors/network-link.md merged in 13342cc | Codex collector package |
 | TASK-SG-CODEX-001A | 2 | Implement network.link.ro pure snapshot logic and tests | GitHub connector fallback | done | pure logic and tests merged in af5e59f | live runner |
-| TASK-SG-CODEX-001B | 2 | Implement network.link.ro live read-only runner | GitHub connector fallback | done | live helper layer merged in 7f7f468; default runner PR opened | review/merge default runner |
-| TASK-SG-CODEX-001C | 2 | Add network.link.ro bounded default runner CLI | GitHub connector fallback | active | CLI/default runner PR opened; runtime wiring forbidden | review/merge then runtime package |
-| TASK-SG-RUNTIME-001 | 2 | Wire network.link.ro into Agent RO runtime | Claude Code | queued | registry/module wiring and proof only after code/tests accepted | after default runner merge |
+| TASK-SG-CODEX-001B | 2 | Implement network.link.ro live read-only runner | GitHub connector fallback | done | live helper layer merged in 7f7f468 | default runner |
+| TASK-SG-CODEX-001C | 2 | Add network.link.ro bounded default runner CLI | GitHub connector fallback | done | CLI/default runner merged in 9dd49c0; server smoke PASS | framework wrapper |
+| TASK-SG-CODEX-001D | 2 | Add network.link.ro framework snapshot wrapper | Claude Code + GitHub PR | done | PR #14 merged in 262c2d; framework wrapper tests PASS | runtime proof |
+| TASK-SG-CODEX-001E | 2 | Soften transient gateway ping loss classification | GitHub connector + Claude Code validation | done | PR #15 merged in b492b2e; transient ICMP loss with DNS alive is WARN/degraded | checks dict |
+| TASK-SG-CODEX-001F | 2 | Add network.link.ro checks dict | GitHub connector + Claude Code validation | done | PR #16 merged in 32c8a38; live latest and ServerGuard consumer show keyed checks dict | Prometheus exporter |
+| TASK-SG-RUNTIME-001 | 2 | Wire network.link.ro into Agent RO runtime | Claude Code | done | latest/history/registry/consumer proof PASS; network.link.ro visible as fresh read-only agent | Prometheus exporter |
+| TASK-SG-CONSUMER-001 | 2 | Prefer full Agent RO registry in ServerGuard consumer | GitHub connector + Claude Code validation | done | ServerGuard PR #4 merged and live; consumer reads registries/agent-ro-full.json primary | checks dict consumer |
+| TASK-SG-CONSUMER-002 | 2 | Preserve Agent RO checks dict in ServerGuard consumer | GitHub connector + Claude Code validation | done | ServerGuard PR #5 merged and live; checks dict preserved through consumer | Prometheus exporter |
+| TASK-SG-PROM-001 | 2 | Implement registry-driven Prometheus /metrics projection | Codex/GitHub connector + Claude Code validation | queued | Numeric metrics from Agent RO latest snapshots exported without per-collector UI wiring | next |
