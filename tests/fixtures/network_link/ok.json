@@ -1,0 +1,30 @@
+{
+  "expected": {
+    "severity": "normal",
+    "severity_code": 0,
+    "state": "OK",
+    "state_code": 0
+  },
+  "facts": {
+    "carrier": true,
+    "dns_github_ok": true,
+    "dns_google_ok": false,
+    "dns_telegram_ok": true,
+    "duplex": "full",
+    "gateway_ip_present": true,
+    "gateway_ping_loss_percent": 0,
+    "gateway_ping_ms_avg": 1.4,
+    "gateway_ping_ms_max": 3.9,
+    "gateway_ping_ms_min": 0.3,
+    "gateway_ping_ok": true,
+    "interface": "enp6s0",
+    "operstate": "up",
+    "rx_dropped": 0,
+    "rx_errors": 0,
+    "speed_mbps": 100,
+    "tx_dropped": 0,
+    "tx_errors": 4,
+    "vpn_dns_present": true,
+    "vpn_interface_present": true
+  }
+}
