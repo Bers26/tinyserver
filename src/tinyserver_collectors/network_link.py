@@ -122,23 +122,28 @@ def classify_state(facts: Mapping[str, Any]) -> tuple[str, int, str, int]:
         return "UNKNOWN", STATE_CODES["UNKNOWN"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]
     if carrier is False or operstate == "down" or gateway_ip_present is False:
         return "BAD", STATE_CODES["BAD"], "critical", SEVERITY_CODES["critical"]
-    if gateway_loss > 5:
+    if gateway_loss > 5 and dns_success_count == 0:
         severity = "critical" if gateway_loss > 20 else "degraded"
         return "BAD", STATE_CODES["BAD"], severity, SEVERITY_CODES[severity]
     if gateway_ping_ok is False and dns_success_count == 0:
         return "BAD", STATE_CODES["BAD"], "degraded", SEVERITY_CODES["degraded"]
-    if gateway_ping_ms_max is not None and gateway_ping_ms_max >= 1000:
+    if gateway_ping_ms_max is not None and gateway_ping_ms_max >= 1000 and dns_success_count == 0:
         return "BAD", STATE_CODES["BAD"], "critical", SEVERITY_CODES["critical"]
 
     warn_conditions = [
         dns_success_count == 0,
+        gateway_loss > 20,
+        5 < gateway_loss <= 20,
         0 < gateway_loss <= 5,
+        gateway_ping_ok is False,
         gateway_ping_ms_max is not None and 100 <= gateway_ping_ms_max < 1000,
+        gateway_ping_ms_max is not None and gateway_ping_ms_max >= 1000,
         expected_speed_mbps is not None and speed_mbps is not None and 0 < speed_mbps < expected_speed_mbps,
         (rx_errors_increased is True or tx_errors_increased is True) and gateway_ping_ok is True and dns_success_count > 0,
     ]
     if any(warn_conditions):
-        return "WARN", STATE_CODES["WARN"], "warning", SEVERITY_CODES["warning"]
+        severity = "degraded" if gateway_loss > 20 or gateway_ping_ok is False else "warning"
+        return "WARN", STATE_CODES["WARN"], severity, SEVERITY_CODES[severity]
     if carrier is True and operstate == "up" and gateway_loss == 0 and gateway_ping_ok is True and dns_success_count >= 1:
         return "OK", STATE_CODES["OK"], "normal", SEVERITY_CODES["normal"]
     return "UNKNOWN", STATE_CODES["UNKNOWN"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]

@@ -168,6 +168,36 @@ def test_classify_state_bad_on_no_carrier() -> None:
     assert (state, state_code, severity, severity_code) == ("BAD", 2, "critical", 4)
 
 
+def test_classify_state_warns_on_transient_gateway_ping_failure_when_dns_works() -> None:
+    state, state_code, severity, severity_code = classify_state(
+        {
+            "interface": "enp6s0",
+            "operstate": "up",
+            "carrier": True,
+            "gateway_ip_present": True,
+            "gateway_ping_loss_percent": 100,
+            "gateway_ping_ok": False,
+            "dns_success_count": 3,
+        }
+    )
+    assert (state, state_code, severity, severity_code) == ("WARN", 1, "degraded", 3)
+
+
+def test_classify_state_bad_when_gateway_and_dns_are_down() -> None:
+    state, state_code, severity, severity_code = classify_state(
+        {
+            "interface": "enp6s0",
+            "operstate": "up",
+            "carrier": True,
+            "gateway_ip_present": True,
+            "gateway_ping_loss_percent": 100,
+            "gateway_ping_ok": False,
+            "dns_success_count": 0,
+        }
+    )
+    assert (state, state_code, severity, severity_code) == ("BAD", 2, "critical", 4)
+
+
 def test_snapshot_defaults_are_read_only_not_runtime_wiring() -> None:
     fixture = load_fixture("ok.json")
     snapshot = build_snapshot(fixture["facts"], collected_at="2026-05-24T23:17:44+00:00")
