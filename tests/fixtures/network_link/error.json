@@ -1,0 +1,31 @@
+{
+  "expected": {
+    "severity": "unknown_or_error",
+    "severity_code": 5,
+    "state": "ERROR",
+    "state_code": 5
+  },
+  "facts": {
+    "carrier": true,
+    "collector_error": true,
+    "dns_github_ok": null,
+    "dns_google_ok": null,
+    "dns_telegram_ok": null,
+    "duplex": "unknown",
+    "gateway_ip_present": true,
+    "gateway_ping_loss_percent": null,
+    "gateway_ping_ms_avg": null,
+    "gateway_ping_ms_max": null,
+    "gateway_ping_ms_min": null,
+    "gateway_ping_ok": null,
+    "interface": "enp6s0",
+    "operstate": "up",
+    "rx_dropped": 0,
+    "rx_errors": 0,
+    "speed_mbps": 100,
+    "tx_dropped": 0,
+    "tx_errors": 0,
+    "vpn_dns_present": null,
+    "vpn_interface_present": null
+  }
+}

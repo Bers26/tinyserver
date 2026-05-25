@@ -16,4 +16,5 @@
 | TASK-SG-DESIGN-002 | 1 | Add Prometheus projection spec in tinyserver | GitHub connector | done | docs/runtime/prometheus-projection.md merged in eaccd47 | network.link design |
 | TASK-SG-DESIGN-003A | 1 | Add network.link.ro draft design skeleton | GitHub connector | done | docs/collectors/network-link.md merged in 2ee0cbd | factual inspect |
 | TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | GitHub connector | done | docs/collectors/network-link.md merged in 13342cc | Codex collector package |
-| TASK-SG-CODEX-001 | 2 | Implement network.link.ro collector and tests | Codex | ready | docs/workpacks/TASK-SG-CODEX-001/README.md prepared | run Codex package |
+| TASK-SG-CODEX-001A | 2 | Implement network.link.ro pure snapshot logic and tests | GitHub connector fallback | active | fixtures/tests PR opened; runtime wiring forbidden | review/merge then live runner |
+| TASK-SG-CODEX-001B | 2 | Implement network.link.ro live read-only runner | Codex or Claude Code | queued | bounded host reads only; no runtime wiring | after pure tests merge |
