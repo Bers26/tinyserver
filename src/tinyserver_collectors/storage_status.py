@@ -13,7 +13,68 @@ SEVERITY_CODES = {"normal": 0, "info": 1, "warning": 2, "degraded": 3, "critical
 FRESHNESS_CODES = {"fresh": 0, "aging": 1, "stale": 2, "expired": 3, "unknown": 4}
 OPERATION_STATE_CODES = {"idle": 0, "queued": 1, "running": 2, "slow": 3, "timed_out": 4, "failed": 5, "completed": 6, "unknown": 7}
 
-DEFAULT_TARGETS = ("/", "/srv/storage")
+# Explicit targets are still supported for tests and future pinning, but the
+# runtime default is dynamic mount discovery so adding a disk does not require a
+# code change.
+DEFAULT_TARGETS: tuple[str, ...] = ()
+
+LOCAL_PERSISTENT_FSTYPES = {
+    "btrfs",
+    "exfat",
+    "ext2",
+    "ext3",
+    "ext4",
+    "f2fs",
+    "ntfs",
+    "vfat",
+    "xfs",
+    "zfs",
+}
+
+EXCLUDED_FSTYPES = {
+    "autofs",
+    "binfmt_misc",
+    "bpf",
+    "cgroup",
+    "cgroup2",
+    "configfs",
+    "debugfs",
+    "devpts",
+    "devtmpfs",
+    "efivarfs",
+    "fusectl",
+    "hugetlbfs",
+    "mqueue",
+    "nsfs",
+    "overlay",
+    "proc",
+    "pstore",
+    "securityfs",
+    "squashfs",
+    "sysfs",
+    "tmpfs",
+    "tracefs",
+}
+
+EXCLUDED_MOUNT_PREFIXES = (
+    "/dev",
+    "/proc",
+    "/run",
+    "/snap",
+    "/sys",
+    "/tmp",
+    "/var/lib/containers",
+    "/var/lib/docker",
+)
+
+PREFERRED_MOUNT_PREFIXES = (
+    "/",
+    "/data",
+    "/home",
+    "/media",
+    "/mnt",
+    "/srv",
+)
 
 
 @dataclass(frozen=True)
@@ -28,6 +89,10 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _decode_proc_mount_field(value: str) -> str:
+    return value.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\")
+
+
 def parse_mounts(text: str) -> dict[str, MountInfo]:
     mounts: dict[str, MountInfo] = {}
     for line in text.splitlines():
@@ -35,7 +100,13 @@ def parse_mounts(text: str) -> dict[str, MountInfo]:
         if len(parts) < 4:
             continue
         source, mountpoint, fstype, options = parts[:4]
-        mounts[mountpoint] = MountInfo(mountpoint=mountpoint, source=source, fstype=fstype, options=options)
+        mountpoint = _decode_proc_mount_field(mountpoint)
+        mounts[mountpoint] = MountInfo(
+            mountpoint=mountpoint,
+            source=_decode_proc_mount_field(source),
+            fstype=fstype,
+            options=options,
+        )
     return mounts
 
 
@@ -44,6 +115,28 @@ def read_mounts(path: str | Path = "/proc/mounts") -> dict[str, MountInfo]:
         return parse_mounts(Path(path).read_text(encoding="utf-8"))
     except OSError:
         return {}
+
+
+def is_relevant_mount(info: MountInfo) -> bool:
+    mountpoint = info.mountpoint
+    if not mountpoint.startswith("/"):
+        return False
+    if mountpoint != "/" and any(mountpoint == prefix or mountpoint.startswith(prefix + "/") for prefix in EXCLUDED_MOUNT_PREFIXES):
+        return False
+    if info.fstype in EXCLUDED_FSTYPES:
+        return False
+    if mountpoint == "/":
+        return True
+    if info.fstype not in LOCAL_PERSISTENT_FSTYPES and not info.source.startswith("/dev/"):
+        return False
+    return any(mountpoint == prefix or mountpoint.startswith(prefix + "/") for prefix in PREFERRED_MOUNT_PREFIXES)
+
+
+def discover_targets(mounts: Mapping[str, MountInfo]) -> list[str]:
+    targets = sorted(info.mountpoint for info in mounts.values() if is_relevant_mount(info))
+    if "/" in mounts and "/" not in targets:
+        targets.insert(0, "/")
+    return sorted(set(targets), key=lambda item: (item != "/", item))
 
 
 def collect_path(path: str, *, mounts: Mapping[str, MountInfo] | None = None) -> dict[str, Any]:
@@ -92,7 +185,9 @@ def collect_path(path: str, *, mounts: Mapping[str, MountInfo] | None = None) ->
 def classify_targets(targets: Iterable[Mapping[str, Any]]) -> tuple[str, int, str, int]:
     worst_state = "OK"
     worst_severity = "normal"
+    seen = False
     for target in targets:
+        seen = True
         exists = target.get("exists") is True
         mounted = target.get("mount_present") is True
         used_percent = target.get("used_percent")
@@ -114,12 +209,15 @@ def classify_targets(targets: Iterable[Mapping[str, Any]]) -> tuple[str, int, st
         else:
             worst_state = "UNKNOWN"
             worst_severity = "unknown_or_error"
+    if not seen:
+        return "UNKNOWN", STATE_CODES["UNKNOWN"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]
     return worst_state, STATE_CODES[worst_state], worst_severity, SEVERITY_CODES[worst_severity]
 
 
-def collect_storage_status(targets: Iterable[str] = DEFAULT_TARGETS, *, mounts_path: str | Path = "/proc/mounts") -> dict[str, Any]:
+def collect_storage_status(targets: Iterable[str] | None = None, *, mounts_path: str | Path = "/proc/mounts") -> dict[str, Any]:
     mounts = read_mounts(mounts_path)
-    target_list = [collect_path(path, mounts=mounts) for path in targets]
+    selected_targets = list(targets) if targets is not None else discover_targets(mounts)
+    target_list = [collect_path(path, mounts=mounts) for path in selected_targets]
     state, state_code, severity, severity_code = classify_targets(target_list)
     return {
         "agent_id": "storage.status.ro",
