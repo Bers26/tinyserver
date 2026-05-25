@@ -141,7 +141,7 @@ def test_to_framework_snapshot_clamps_unknown_state() -> None:
     )
 
     assert snapshot["state"] == "UNKNOWN"
-    assert snapshot["severity"] == 5
+    assert snapshot["severity"] == 4
     assert isinstance(snapshot["checks"], dict)
 
 
@@ -158,3 +158,25 @@ def test_vpn_hint_source_type_is_contract_valid() -> None:
     })
 
     assert snapshot["checks"]["vpn_hint"]["evidence"]["source_type"] == "derived"
+
+
+def test_unknown_check_severities_are_contract_valid() -> None:
+    snapshot = to_framework_snapshot({
+        "collected_at": "2026-05-25T22:30:00+00:00",
+        "state": "UNKNOWN",
+        "severity_code": 5,
+        "interface": "enp6s0",
+        "operstate": "up",
+        "carrier_value": 1,
+        "speed_mbps": 100,
+        "gateway_ip_present_value": -1,
+        "gateway_ping_ok_value": -1,
+        "gateway_ping_loss_percent": None,
+        "dns_checked_domains_count": 0,
+        "dns_success_count": 0,
+        "vpn_interface_present_value": -1,
+        "vpn_dns_present_value": -1,
+    })
+
+    assert snapshot["severity"] == 4
+    assert all(check["severity"] <= 4 for check in snapshot["checks"].values())
