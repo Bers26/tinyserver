@@ -149,3 +149,28 @@ def test_framework_snapshot_marks_missing_target_bad() -> None:
     assert check["severity"] == 4
     assert snapshot["metrics"]["storage_srv_storage_exists_value"] == 0
     assert snapshot["metrics"]["storage_srv_storage_mount_present_value"] == 0
+
+
+def test_storage_source_type_is_contract_valid() -> None:
+    snapshot = to_framework_snapshot({
+        "collected_at": "2026-05-25T22:10:00+00:00",
+        "state": "OK",
+        "severity_code": 0,
+        "target_count": 1,
+        "targets": [{
+            "path": "/",
+            "exists": True,
+            "mount_present": True,
+            "source": "/dev/root",
+            "fstype": "ext4",
+            "options": "rw,relatime",
+            "readonly": False,
+            "size_bytes": 1000,
+            "used_bytes": 100,
+            "free_bytes": 900,
+            "available_bytes": 850,
+            "used_percent": 10.0,
+        }],
+    })
+
+    assert snapshot["checks"]["storage_root_health"]["evidence"]["source_type"] == "derived"

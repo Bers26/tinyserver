@@ -100,7 +100,7 @@ def _target_check(target: dict[str, Any], collected_at: str) -> dict[str, Any]:
         rule_id=f"storage.target.{_metric_name(path, 'health')}",
         evidence={
             "source": "/proc/mounts + statvfs",
-            "source_type": "file+syscall",
+            "source_type": "derived",
             "command_class": "read_only",
             "observed_value": (
                 f"path={path} exists={target.get('exists')} mount_present={target.get('mount_present')} "
