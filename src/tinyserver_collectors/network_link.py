@@ -1,13 +1,17 @@
-"""Pure network.link.ro snapshot logic.
+"""Read-only network.link.ro snapshot and live fact helpers.
 
-This module intentionally contains no host command execution. Runtime collection
-is a later wiring task; this code validates the stream contract and state model.
+The pure functions build and classify Agent RO snapshots. The live helper keeps
+host reads behind an injectable command runner and an injectable sysfs root so
+unit tests never depend on the real network.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from pathlib import Path
+import re
+from typing import Any, Callable, Mapping, Sequence
 
 BOOL_TRUE = 1
 BOOL_FALSE = 0
@@ -17,6 +21,12 @@ STATE_CODES = {"OK": 0, "WARN": 1, "BAD": 2, "UNKNOWN": 3, "STALE": 4, "ERROR": 
 SEVERITY_CODES = {"normal": 0, "info": 1, "warning": 2, "degraded": 3, "critical": 4, "unknown_or_error": 5}
 FRESHNESS_CODES = {"fresh": 0, "aging": 1, "stale": 2, "expired": 3, "unknown": 4}
 OPERATION_STATE_CODES = {"idle": 0, "queued": 1, "running": 2, "slow": 3, "timed_out": 4, "failed": 5, "completed": 6, "unknown": 7}
+
+DNS_DOMAINS = {
+    "github": "github.com",
+    "google": "google.com",
+    "telegram": "api.telegram.org",
+}
 
 REQUIRED_OUTPUT_FIELDS = (
     "agent_id", "collected_at", "interface", "operstate", "carrier", "carrier_value",
@@ -30,6 +40,16 @@ REQUIRED_OUTPUT_FIELDS = (
     "wan_hint", "vpn_hint", "state", "state_code", "severity", "severity_code",
     "freshness", "freshness_code", "operation_state", "operation_state_code",
 )
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+
+
+CommandRunner = Callable[[Sequence[str], int | float], CommandResult]
 
 
 def utc_now_iso() -> str:
@@ -168,3 +188,138 @@ def build_snapshot(facts: Mapping[str, Any], collected_at: str | None = None) ->
     for key in REQUIRED_OUTPUT_FIELDS:
         snapshot.setdefault(key, None)
     return {key: snapshot[key] for key in REQUIRED_OUTPUT_FIELDS}
+
+
+def parse_default_route(output: str) -> tuple[str | None, str | None]:
+    for line in output.splitlines():
+        parts = line.split()
+        if not parts or parts[0] != "default":
+            continue
+        iface = None
+        gateway = None
+        for index, part in enumerate(parts):
+            if part == "dev" and index + 1 < len(parts):
+                iface = parts[index + 1]
+            if part == "via" and index + 1 < len(parts):
+                gateway = parts[index + 1]
+        return iface, gateway
+    return None, None
+
+
+def parse_ping_summary(output: str) -> dict[str, float | bool | None]:
+    result: dict[str, float | bool | None] = {
+        "gateway_ping_ok": None,
+        "gateway_ping_loss_percent": None,
+        "gateway_ping_ms_min": None,
+        "gateway_ping_ms_avg": None,
+        "gateway_ping_ms_max": None,
+    }
+    loss_match = re.search(r"([0-9]+(?:\.[0-9]+)?)%\s*packet loss", output)
+    if loss_match:
+        loss_percent = float(loss_match.group(1))
+        result["gateway_ping_loss_percent"] = loss_percent
+        result["gateway_ping_ok"] = loss_percent < 100
+
+    rtt_match = re.search(r"=\s*([0-9.]+)/([0-9.]+)/([0-9.]+)/", output)
+    if rtt_match:
+        result["gateway_ping_ms_min"] = float(rtt_match.group(1))
+        result["gateway_ping_ms_avg"] = float(rtt_match.group(2))
+        result["gateway_ping_ms_max"] = float(rtt_match.group(3))
+    return result
+
+
+def read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def read_int(path: Path) -> int | None:
+    text = read_text(path)
+    if text is None:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def interface_names(sysfs_root: Path) -> list[str]:
+    try:
+        return sorted(path.name for path in sysfs_root.iterdir())
+    except OSError:
+        return []
+
+
+def collect_network_link(
+    command_runner: CommandRunner,
+    sysfs_root: str | Path = "/sys/class/net",
+    timeout: int | float = 5,
+    collected_at: str | None = None,
+) -> dict[str, Any]:
+    facts: dict[str, Any] = {
+        "agent_id": "network.link.ro",
+        "wan_hint": "not_evaluated",
+        "vpn_hint": "not_evaluated",
+    }
+    root = Path(sysfs_root)
+
+    try:
+        route = command_runner(("ip", "route", "show", "default"), timeout)
+        iface, gateway = parse_default_route(route.stdout)
+        facts["interface"] = iface
+        facts["gateway_ip_present"] = gateway is not None
+
+        if not iface:
+            return build_snapshot(facts, collected_at=collected_at)
+
+        iface_path = root / iface
+        stats_path = iface_path / "statistics"
+        facts["operstate"] = read_text(iface_path / "operstate") or "unknown"
+        facts["carrier"] = read_text(iface_path / "carrier")
+        facts["speed_mbps"] = read_int(iface_path / "speed")
+        facts["duplex"] = read_text(iface_path / "duplex") or "unknown"
+        for key in ("rx_errors", "tx_errors", "rx_dropped", "tx_dropped"):
+            facts[key] = read_int(stats_path / key) or 0
+
+        if gateway:
+            ping = command_runner(("ping", "-c", "5", "-W", "1", gateway), timeout)
+            facts.update(parse_ping_summary(ping.stdout))
+            if facts.get("gateway_ping_ok") is None:
+                facts["gateway_ping_ok"] = ping.returncode == 0
+            if facts.get("gateway_ping_loss_percent") is None:
+                facts["gateway_ping_loss_percent"] = 0.0 if ping.returncode == 0 else 100.0
+        else:
+            facts["gateway_ping_ok"] = False
+            facts["gateway_ping_loss_percent"] = 100.0
+
+        dns_success = 0
+        dns_checked = 0
+        for label, domain in DNS_DOMAINS.items():
+            dns_checked += 1
+            result = command_runner(("getent", "hosts", domain), timeout)
+            ok = result.returncode == 0 and bool(result.stdout.strip())
+            facts[f"dns_{label}_ok"] = ok
+            if ok:
+                dns_success += 1
+        facts["dns_checked_domains_count"] = dns_checked
+        facts["dns_success_count"] = dns_success
+        facts["dns_ok"] = dns_success >= 1
+
+        names = interface_names(root)
+        facts["vpn_interface_present"] = any(name.startswith(("tun", "tap", "wg")) for name in names)
+        resolver = command_runner(("resolvectl", "status"), timeout)
+        facts["vpn_dns_present"] = "tun" in resolver.stdout and "DNS Servers:" in resolver.stdout
+        facts["wan_hint"] = "dns_reachable" if facts["dns_ok"] else "dns_unreachable"
+        facts["vpn_hint"] = "vpn_interface_present" if facts["vpn_interface_present"] else "no_vpn_interface_detected"
+    except Exception as exc:
+        facts["collector_error"] = True
+        facts["wan_hint"] = f"collector_error:{type(exc).__name__}"
+        facts["vpn_hint"] = "collector_error"
+        snapshot = build_snapshot(facts, collected_at=collected_at)
+        snapshot["operation_state"] = "failed"
+        snapshot["operation_state_code"] = OPERATION_STATE_CODES["failed"]
+        return snapshot
+
+    return build_snapshot(facts, collected_at=collected_at)
