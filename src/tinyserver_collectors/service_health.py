@@ -20,6 +20,11 @@ EXPECTED_CORE_UNITS = (
 )
 DISCOVERY_PREFIXES = ("agent-ro-", "serverguard-agent-ro-")
 DISCOVERY_SUFFIXES = (".service", ".timer")
+IGNORED_DISCOVERY_UNITS = {
+    # power.status.ro is refreshed by agent-ro-registry.timer in the current v0.1 runtime.
+    # The old standalone timer may remain installed but disabled.
+    "agent-ro-power-status-ro.timer",
+}
 UNIT_TYPE_CODES = {"service": 1, "timer": 2, "other": 0}
 
 
@@ -62,7 +67,11 @@ def parse_unit_files(text: str) -> list[UnitFile]:
 
 
 def is_relevant_unit(unit: str) -> bool:
-    return unit.endswith(DISCOVERY_SUFFIXES) and unit.startswith(DISCOVERY_PREFIXES)
+    return (
+        unit not in IGNORED_DISCOVERY_UNITS
+        and unit.endswith(DISCOVERY_SUFFIXES)
+        and unit.startswith(DISCOVERY_PREFIXES)
+    )
 
 
 def discover_units(unit_files: Iterable[UnitFile]) -> list[str]:
