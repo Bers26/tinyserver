@@ -23,6 +23,13 @@ def _number(value: Any, default: int | float = 0) -> int | float:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else default
 
 
+def _int_value(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _bool_value(value: Any) -> int:
     if value is True:
         return 1
@@ -140,7 +147,7 @@ def to_framework_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "collected_at": str(raw.get("collected_at") or ""),
         "ttl_sec": TTL_SEC,
         "state": state,
-        "severity": int(raw.get("severity_code") or 5),
+        "severity": _int_value(raw.get("severity_code"), 5),
         "summary": _summary(raw),
         "checks": _checks(raw),
         "metrics": _metrics(raw),
