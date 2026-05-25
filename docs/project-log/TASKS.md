@@ -16,5 +16,6 @@
 | TASK-SG-DESIGN-002 | 1 | Add Prometheus projection spec in tinyserver | GitHub connector | done | docs/runtime/prometheus-projection.md merged in eaccd47 | network.link design |
 | TASK-SG-DESIGN-003A | 1 | Add network.link.ro draft design skeleton | GitHub connector | done | docs/collectors/network-link.md merged in 2ee0cbd | factual inspect |
 | TASK-SG-DESIGN-003B | 1 | Accept network.link.ro design from factual state | GitHub connector | done | docs/collectors/network-link.md merged in 13342cc | Codex collector package |
-| TASK-SG-CODEX-001A | 2 | Implement network.link.ro pure snapshot logic and tests | GitHub connector fallback | active | fixtures/tests PR opened; runtime wiring forbidden | review/merge then live runner |
-| TASK-SG-CODEX-001B | 2 | Implement network.link.ro live read-only runner | Codex or Claude Code | queued | bounded host reads only; no runtime wiring | after pure tests merge |
+| TASK-SG-CODEX-001A | 2 | Implement network.link.ro pure snapshot logic and tests | GitHub connector fallback | done | pure logic and tests merged in af5e59f | live runner |
+| TASK-SG-CODEX-001B | 2 | Implement network.link.ro live read-only runner | GitHub connector fallback | active | live runner PR opened; runtime wiring forbidden | review/merge then runtime package |
+| TASK-SG-RUNTIME-001 | 2 | Wire network.link.ro into Agent RO runtime | Claude Code | queued | registry/module wiring and proof only after code/tests accepted | after live runner merge |
