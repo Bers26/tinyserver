@@ -18,6 +18,7 @@ def test_parse_unit_files_and_discovery() -> None:
             [
                 "UNIT FILE STATE PRESET",
                 "agent-ro-network-link-ro.timer enabled enabled",
+                "agent-ro-power-status-ro.timer disabled enabled",
                 "serverguard-agent-ro-prom.timer enabled enabled",
                 "ssh.service enabled enabled",
                 "docker.service enabled enabled",
@@ -31,6 +32,7 @@ def test_parse_unit_files_and_discovery() -> None:
     assert "serverguard-agent-ro-prom.timer" in units
     assert "agent-ro-storage-status-ro.timer" in units
     assert "agent-ro-registry.timer" in units
+    assert "agent-ro-power-status-ro.timer" not in units
     assert "ssh.service" not in units
     assert "docker.service" not in units
 
