@@ -41,6 +41,26 @@ NETWORK_METRIC_NAMES = {
     "vpn_dns_present_value": "agent_ro_network_vpn_dns_present_value",
 }
 
+STORAGE_METRIC_NAMES = {
+    "target_count": "agent_ro_storage_target_count",
+    "storage_root_exists_value": "agent_ro_storage_root_exists_value",
+    "storage_root_mount_present_value": "agent_ro_storage_root_mount_present_value",
+    "storage_root_readonly_value": "agent_ro_storage_root_readonly_value",
+    "storage_root_size_bytes": "agent_ro_storage_root_size_bytes",
+    "storage_root_used_bytes": "agent_ro_storage_root_used_bytes",
+    "storage_root_free_bytes": "agent_ro_storage_root_free_bytes",
+    "storage_root_available_bytes": "agent_ro_storage_root_available_bytes",
+    "storage_root_used_percent": "agent_ro_storage_root_used_percent",
+    "storage_srv_storage_exists_value": "agent_ro_storage_srv_storage_exists_value",
+    "storage_srv_storage_mount_present_value": "agent_ro_storage_srv_storage_mount_present_value",
+    "storage_srv_storage_readonly_value": "agent_ro_storage_srv_storage_readonly_value",
+    "storage_srv_storage_size_bytes": "agent_ro_storage_srv_storage_size_bytes",
+    "storage_srv_storage_used_bytes": "agent_ro_storage_srv_storage_used_bytes",
+    "storage_srv_storage_free_bytes": "agent_ro_storage_srv_storage_free_bytes",
+    "storage_srv_storage_available_bytes": "agent_ro_storage_srv_storage_available_bytes",
+    "storage_srv_storage_used_percent": "agent_ro_storage_srv_storage_used_percent",
+}
+
 RESERVED_METRIC_KEYS = {"freshness_code", "operation_state_code"}
 
 
@@ -142,6 +162,8 @@ def render_prometheus(metrics: Iterable[ProjectedMetric]) -> str:
 def _metric_name(stream: str, key: str) -> str:
     if stream == "network.link" and key in NETWORK_METRIC_NAMES:
         return NETWORK_METRIC_NAMES[key]
+    if stream == "storage.status" and key in STORAGE_METRIC_NAMES:
+        return STORAGE_METRIC_NAMES[key]
     return f"agent_ro_{_safe_name(stream)}_{_safe_name(key)}"
 
 
