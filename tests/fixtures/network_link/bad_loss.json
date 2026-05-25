@@ -1,7 +1,7 @@
 {
   "expected": {
-    "severity": "degraded",
-    "severity_code": 3,
+    "severity": "critical",
+    "severity_code": 4,
     "state": "BAD",
     "state_code": 2
   },
