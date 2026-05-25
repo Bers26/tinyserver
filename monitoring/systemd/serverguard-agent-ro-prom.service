@@ -1,0 +1,13 @@
+[Unit]
+Description=Write ServerGuard Agent RO Prometheus textfile
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=bers
+Group=bers
+WorkingDirectory=/opt/serverguard-monitoring
+ExecStart=/opt/serverguard-monitoring/bin/write-agent-ro-prom.sh
+Nice=5
+IOSchedulingClass=best-effort
