@@ -143,3 +143,18 @@ def test_to_framework_snapshot_clamps_unknown_state() -> None:
     assert snapshot["state"] == "UNKNOWN"
     assert snapshot["severity"] == 5
     assert isinstance(snapshot["checks"], dict)
+
+
+def test_vpn_hint_source_type_is_contract_valid() -> None:
+    from tinyserver_collectors.network_link_framework import to_framework_snapshot
+
+    snapshot = to_framework_snapshot({
+        "collected_at": "2026-05-25T21:45:00+00:00",
+        "state": "OK",
+        "severity_code": 0,
+        "vpn_interface_present_value": 1,
+        "vpn_dns_present_value": 1,
+        "vpn_hint": "vpn_interface_present",
+    })
+
+    assert snapshot["checks"]["vpn_hint"]["evidence"]["source_type"] == "derived"
