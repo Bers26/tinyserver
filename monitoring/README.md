@@ -20,12 +20,12 @@ bin/write-agent-ro-prom.sh
 textfile/agent_ro.prom
 ```
 
-Ports bind to localhost only:
+Port policy:
 
 ```text
-127.0.0.1:9090 Prometheus
-127.0.0.1:3000 Grafana
-127.0.0.1:9100 node_exporter
+0.0.0.0:9090 Prometheus LAN access
+0.0.0.0:3000 Grafana LAN access
+127.0.0.1:9100 node_exporter local-only
 ```
 
 Deployment outline:
@@ -37,11 +37,12 @@ Deployment outline:
 4. docker compose up -d
 5. verify node_exporter exposes agent_ro_* metrics
 6. verify Prometheus query agent_ro_state_code
-7. open Grafana through SSH/local tunnel or localhost access
+7. open Grafana from LAN
+8. install a local refresh timer for bin/write-agent-ro-prom.sh
 ```
 
 Boundary:
 
 ```text
-No secrets, no Docker socket, no action endpoints, no public bind by default.
+No secrets, no Docker socket, no action endpoints, no fixed server IP dependency.
 ```
