@@ -18,3 +18,5 @@
 | 2026-05-25 | SGTS-129 | ServerGuard checks dict live sync | PASS | live consumer preserved checks as dict; app/api/maid.py untouched | network producer checks |
 | 2026-05-25 | SGTS-132 | tinyserver PR #16 checks dict validation | PASS | 4 focused tests passed; CHECKS_KEYS_AND_SHAPE_OK | merge PR #16 |
 | 2026-05-25 | SGTS-134 | network.link.ro checks dict live smoke | PASS | latest and ServerGuard consumer show link/gateway_ping/dns/vpn_hint/interface_counters checks | Prometheus exporter |
+| 2026-05-25 | SGTS-139 | PR #17 Prometheus projection validation | PASS | 3 tests passed; compile OK; fixture and live registry CLI proof OK | merge PR #17 |
+| 2026-05-25 | SGTS-141 | Prometheus projection live sync | PASS | main contains 78db512; CLI emits metrics for serverguard.server, power.status, network.link | storage.status.ro |
