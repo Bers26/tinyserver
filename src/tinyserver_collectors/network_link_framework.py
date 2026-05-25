@@ -219,7 +219,7 @@ def _vpn_hint_check(raw: dict[str, Any]) -> dict[str, Any]:
         evidence=_evidence(
             raw,
             source="interfaces/resolvectl",
-            source_type="mixed",
+            source_type="derived",
             command_class="read_only",
             observed_value=f"vpn_interface_present={vpn_iface} vpn_dns_present={vpn_dns} vpn_hint={hint}",
         ),
