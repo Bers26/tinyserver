@@ -25,6 +25,15 @@ def _float_value(value: Any, default: float | None = None) -> float | None:
         return default
 
 
+def _contract_severity(value: Any, default: int = 4) -> int:
+    severity = _int_value(value, default)
+    if severity < 0:
+        return 0
+    if severity > 4:
+        return 4
+    return severity
+
+
 def _metric_subset(raw: dict[str, Any]) -> dict[str, Any]:
     keys = [
         "carrier_value",
@@ -64,7 +73,7 @@ def _check(
 ) -> dict[str, Any]:
     return {
         "state": state,
-        "severity": severity,
+        "severity": _contract_severity(severity),
         "confidence": confidence,
         "summary": summary,
         "rule_id": rule_id,
@@ -279,7 +288,7 @@ def to_framework_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     state = str(raw.get("state") or "UNKNOWN").upper()
     if state not in {"OK", "WARN", "BAD", "UNKNOWN"}:
         state = "UNKNOWN"
-    severity = _int_value(raw.get("severity_code"), 5)
+    severity = _contract_severity(raw.get("severity_code"), 4)
     return {
         "schema_version": "1.0",
         "agent_id": "network.link.ro",
