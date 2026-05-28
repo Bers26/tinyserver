@@ -3,9 +3,11 @@ from __future__ import annotations
 from tinyserver_collectors.storage_status import (
     MountInfo,
     classify_targets,
+    collect_storage_status,
     discover_targets,
     is_relevant_mount,
     parse_mounts,
+    parse_smartctl_output,
 )
 from tinyserver_collectors.storage_status_framework import to_framework_snapshot
 
@@ -174,3 +176,94 @@ def test_storage_source_type_is_contract_valid() -> None:
     })
 
     assert snapshot["checks"]["storage_root_health"]["evidence"]["source_type"] == "derived"
+
+
+def test_parse_smartctl_output_extracts_passed_and_ata_attributes() -> None:
+    parsed = parse_smartctl_output(
+        """
+SMART overall-health self-assessment test result: PASSED
+  5 Reallocated_Sector_Ct   0x0033   100   100   010    Pre-fail  Always       -       0
+  9 Power_On_Hours          0x0032   088   088   000    Old_age   Always       -       12345
+ 12 Power_Cycle_Count       0x0032   099   099   020    Old_age   Always       -       17
+194 Temperature_Celsius     0x0022   064   052   000    Old_age   Always       -       36
+197 Current_Pending_Sector  0x0012   100   100   000    Old_age   Always       -       0
+198 Offline_Uncorrectable   0x0010   100   100   000    Old_age   Offline      -       0
+199 UDMA_CRC_Error_Count    0x003e   200   200   000    Old_age   Always       -       2
+"""
+    )
+
+    assert parsed["health"] == "PASSED"
+    assert parsed["health_code"] == 0
+    assert parsed["attributes"] == {
+        "reallocated_sector_count": 0,
+        "power_on_hours": 12345,
+        "power_cycle_count": 17,
+        "temperature_c": 36,
+        "current_pending_sector": 0,
+        "offline_uncorrectable": 0,
+        "udma_crc_error_count": 2,
+    }
+
+
+def test_unavailable_smartctl_projects_unknown_without_crash(tmp_path) -> None:
+    mounts_path = tmp_path / "mounts"
+    mounts_path.write_text("/dev/sda1 / ext4 rw,relatime 0 0\n", encoding="utf-8")
+
+    def fake_runner(command: list[str], timeout: float) -> tuple[int, str, str]:
+        raise PermissionError("permission denied")
+
+    raw = collect_storage_status(targets=[], mounts_path=mounts_path, command_runner=fake_runner)
+    snapshot = to_framework_snapshot(raw)
+
+    assert raw["state"] == "UNKNOWN"
+    assert raw["smart_devices"]["devices"][0]["status"] == "unavailable"
+    assert snapshot["checks"]["storage_disk_sda_health"]["state"] == "UNKNOWN"
+    assert snapshot["metrics"]["storage_disk_sda_smart_available_value"] == 0
+
+
+def test_framework_snapshot_includes_smart_checks_and_metrics() -> None:
+    snapshot = to_framework_snapshot(
+        {
+            "collected_at": "2026-05-25T22:10:00+00:00",
+            "state": "OK",
+            "severity_code": 0,
+            "target_count": 0,
+            "targets": [],
+            "smart_devices": {
+                "available": True,
+                "status": "ok",
+                "devices": [
+                    {
+                        "device": "/dev/nvme0n1",
+                        "available": True,
+                        "status": "ok",
+                        "health": "PASSED",
+                        "health_code": 0,
+                        "attributes": {
+                            "temperature_c": 41,
+                            "power_on_hours": 100,
+                            "power_cycle_count": 7,
+                            "reallocated_sector_count": 0,
+                            "current_pending_sector": 0,
+                            "offline_uncorrectable": 0,
+                            "udma_crc_error_count": 0,
+                            "wear_leveling_count": 99,
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    check = snapshot["checks"]["storage_disk_nvme0n1_health"]
+    assert check["state"] == "OK"
+    assert snapshot["metrics"]["storage_disk_nvme0n1_smart_available_value"] == 1
+    assert snapshot["metrics"]["storage_disk_nvme0n1_smart_health_code"] == 0
+    assert snapshot["metrics"]["storage_disk_nvme0n1_temperature_c"] == 41
+    assert snapshot["metrics"]["storage_disk_nvme0n1_power_on_hours"] == 100
+    assert snapshot["metrics"]["storage_disk_nvme0n1_power_cycle_count"] == 7
+    assert snapshot["metrics"]["storage_disk_nvme0n1_reallocated_sector_count"] == 0
+    assert snapshot["metrics"]["storage_disk_nvme0n1_current_pending_sector"] == 0
+    assert snapshot["metrics"]["storage_disk_nvme0n1_offline_uncorrectable"] == 0
+    assert snapshot["metrics"]["storage_disk_nvme0n1_udma_crc_error_count"] == 0
+    assert snapshot["metrics"]["storage_disk_nvme0n1_wear_leveling_count"] == 99

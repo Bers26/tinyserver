@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+import re
+import shutil
+import subprocess
+from typing import Any, Callable, Iterable, Mapping
 
 STATE_CODES = {"OK": 0, "WARN": 1, "BAD": 2, "UNKNOWN": 3, "STALE": 4, "ERROR": 5, "DISABLED": 6}
 SEVERITY_CODES = {"normal": 0, "info": 1, "warning": 2, "degraded": 3, "critical": 4, "unknown_or_error": 5}
@@ -17,6 +20,7 @@ OPERATION_STATE_CODES = {"idle": 0, "queued": 1, "running": 2, "slow": 3, "timed
 # runtime default is dynamic mount discovery so adding a disk does not require a
 # code change.
 DEFAULT_TARGETS: tuple[str, ...] = ()
+SMARTCTL_TIMEOUT_SEC = 5.0
 
 LOCAL_PERSISTENT_FSTYPES = {
     "btrfs",
@@ -85,6 +89,9 @@ class MountInfo:
     options: str
 
 
+CommandRunner = Callable[[list[str], float], tuple[int, str, str]]
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -137,6 +144,165 @@ def discover_targets(mounts: Mapping[str, MountInfo]) -> list[str]:
     if "/" in mounts and "/" not in targets:
         targets.insert(0, "/")
     return sorted(set(targets), key=lambda item: (item != "/", item))
+
+
+def _disk_device_from_source(source: str) -> str | None:
+    if not source.startswith("/dev/"):
+        return None
+    name = source.removeprefix("/dev/")
+    if name.startswith(("mapper/", "loop", "ram", "sr")):
+        return None
+    if name.startswith(("nvme", "mmcblk")):
+        return f"/dev/{re.sub(r'p\d+$', '', name)}"
+    return f"/dev/{re.sub(r'\d+$', '', name)}"
+
+
+def discover_smart_devices(mounts: Mapping[str, MountInfo]) -> list[str]:
+    devices: set[str] = set()
+    for info in mounts.values():
+        if not is_relevant_mount(info):
+            continue
+        device = _disk_device_from_source(info.source)
+        if device is not None:
+            devices.add(device)
+    return sorted(devices)
+
+
+def _first_int(value: str) -> int | None:
+    match = re.search(r"-?\d+", value)
+    if match is None:
+        return None
+    try:
+        return int(match.group(0))
+    except ValueError:
+        return None
+
+
+def parse_smartctl_output(text: str) -> dict[str, Any]:
+    health = "UNKNOWN"
+    health_code = 5
+    attributes: dict[str, int] = {}
+
+    attribute_names = {
+        "Reallocated_Sector_Ct": "reallocated_sector_count",
+        "Current_Pending_Sector": "current_pending_sector",
+        "Offline_Uncorrectable": "offline_uncorrectable",
+        "UDMA_CRC_Error_Count": "udma_crc_error_count",
+        "Power_On_Hours": "power_on_hours",
+        "Power_Cycle_Count": "power_cycle_count",
+        "Temperature_Celsius": "temperature_c",
+        "Airflow_Temperature_Cel": "temperature_c",
+        "Wear_Leveling_Count": "wear_leveling_count",
+    }
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        lower = line.lower()
+
+        if (
+            "overall-health" in lower
+            or "self-assessment test result" in lower
+            or "smart health status" in lower
+        ):
+            status_text = lower.split(":", 1)[-1].strip()
+            if "fail" in status_text:
+                health = "FAILED"
+                health_code = 2
+            elif "passed" in status_text or status_text == "ok" or status_text.startswith("ok "):
+                health = "PASSED"
+                health_code = 0
+
+        parts = line.split(None, 9)
+        if len(parts) < 10:
+            continue
+        if not parts[0].isdigit():
+            continue
+
+        attribute_key = attribute_names.get(parts[1])
+        if attribute_key is None:
+            continue
+
+        value = _first_int(parts[9])
+        if value is not None:
+            attributes[attribute_key] = value
+
+    return {
+        "health": health,
+        "health_code": health_code,
+        "attributes": attributes,
+    }
+
+
+def _default_command_runner(command: list[str], timeout: float) -> tuple[int, str, str]:
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    return completed.returncode, completed.stdout, completed.stderr
+
+
+def collect_smart_device(
+    device: str,
+    *,
+    command_runner: CommandRunner | None = None,
+    timeout_sec: float = SMARTCTL_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    command = ["smartctl", "-H", "-A", device]
+    if command_runner is None and shutil.which("smartctl") is None:
+        return {
+            "device": device,
+            "available": False,
+            "status": "smartctl_missing",
+            "error": "smartctl not found",
+            "command": command,
+        }
+
+    runner = command_runner or _default_command_runner
+    try:
+        returncode, stdout, stderr = runner(command, timeout_sec)
+    except subprocess.TimeoutExpired:
+        return {
+            "device": device,
+            "available": False,
+            "status": "timeout",
+            "error": "smartctl timed out",
+            "command": command,
+        }
+    except (OSError, PermissionError) as exc:
+        return {
+            "device": device,
+            "available": False,
+            "status": "unavailable",
+            "error": str(exc),
+            "command": command,
+        }
+
+    combined_output = stdout + "\n" + stderr
+    parsed = parse_smartctl_output(combined_output)
+    available = parsed["health"] != "UNKNOWN" or bool(parsed["attributes"])
+    return {
+        "device": device,
+        "available": available,
+        "status": "ok" if available else ("unparseable" if returncode == 0 else "command_failed"),
+        "returncode": returncode,
+        "error": stderr.strip() or None,
+        "command": command,
+        **parsed,
+    }
+
+
+def collect_smart_status(
+    mounts: Mapping[str, MountInfo],
+    *,
+    command_runner: CommandRunner | None = None,
+    timeout_sec: float = SMARTCTL_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    devices = discover_smart_devices(mounts)
+    results = [
+        collect_smart_device(device, command_runner=command_runner, timeout_sec=timeout_sec)
+        for device in sorted(set(devices))
+    ]
+    if not results:
+        return {"available": False, "status": "no_devices", "devices": []}
+    available = any(result.get("available") is True for result in results)
+    return {"available": available, "status": "ok" if available else "unavailable", "devices": results}
 
 
 def collect_path(path: str, *, mounts: Mapping[str, MountInfo] | None = None) -> dict[str, Any]:
@@ -214,15 +380,22 @@ def classify_targets(targets: Iterable[Mapping[str, Any]]) -> tuple[str, int, st
     return worst_state, STATE_CODES[worst_state], worst_severity, SEVERITY_CODES[worst_severity]
 
 
-def collect_storage_status(targets: Iterable[str] | None = None, *, mounts_path: str | Path = "/proc/mounts") -> dict[str, Any]:
+def collect_storage_status(
+    targets: Iterable[str] | None = None,
+    *,
+    mounts_path: str | Path = "/proc/mounts",
+    command_runner: CommandRunner | None = None,
+) -> dict[str, Any]:
     mounts = read_mounts(mounts_path)
     selected_targets = list(targets) if targets is not None else discover_targets(mounts)
     target_list = [collect_path(path, mounts=mounts) for path in selected_targets]
+    smart_devices = collect_smart_status(mounts, command_runner=command_runner)
     state, state_code, severity, severity_code = classify_targets(target_list)
     return {
         "agent_id": "storage.status.ro",
         "collected_at": utc_now_iso(),
         "targets": target_list,
+        "smart_devices": smart_devices,
         "target_count": len(target_list),
         "state": state,
         "state_code": state_code,
