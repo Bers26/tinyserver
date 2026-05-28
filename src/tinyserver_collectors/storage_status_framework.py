@@ -38,6 +38,25 @@ def _bool_value(value: Any) -> int:
     return -1
 
 
+def _device_label(device: str) -> str:
+    label = device.removeprefix("/dev/").strip("/").replace("/", "_").replace("-", "_")
+    return label or "unknown"
+
+
+def _smart_metric_name(device: str, suffix: str) -> str:
+    return f"storage_disk_{_device_label(device)}_{suffix}"
+
+
+def _smart_devices(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    smart = raw.get("smart_devices")
+    if not isinstance(smart, dict):
+        return []
+    devices = smart.get("devices")
+    if not isinstance(devices, list):
+        return []
+    return [device for device in devices if isinstance(device, dict)]
+
+
 def _metrics(raw: dict[str, Any]) -> dict[str, int | float]:
     metrics: dict[str, int | float] = {
         "target_count": _number(raw.get("target_count"), 0),
@@ -55,6 +74,28 @@ def _metrics(raw: dict[str, Any]) -> dict[str, int | float]:
             value = target.get(key)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 metrics[_metric_name(path, key)] = value
+    for device in _smart_devices(raw):
+        device_name = str(device.get("device") or "unknown")
+        metrics[_smart_metric_name(device_name, "smart_available_value")] = _bool_value(device.get("available"))
+        health_code = device.get("health_code")
+        if isinstance(health_code, (int, float)) and not isinstance(health_code, bool):
+            metrics[_smart_metric_name(device_name, "smart_health_code")] = health_code
+        attributes = device.get("attributes")
+        if not isinstance(attributes, dict):
+            attributes = {}
+        for key in (
+            "temperature_c",
+            "power_on_hours",
+            "power_cycle_count",
+            "reallocated_sector_count",
+            "current_pending_sector",
+            "offline_uncorrectable",
+            "udma_crc_error_count",
+            "wear_leveling_count",
+        ):
+            value = attributes.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                metrics[_smart_metric_name(device_name, key)] = value
     return metrics
 
 
@@ -112,6 +153,53 @@ def _target_check(target: dict[str, Any], collected_at: str) -> dict[str, Any]:
     )
 
 
+def _smart_device_check(device: dict[str, Any], collected_at: str) -> dict[str, Any]:
+    device_name = str(device.get("device") or "unknown")
+    available = device.get("available") is True
+    health = str(device.get("health") or "UNKNOWN").upper()
+    attributes = device.get("attributes")
+    if not isinstance(attributes, dict):
+        attributes = {}
+    counters = {
+        key: _int_value(attributes.get(key), 0)
+        for key in (
+            "reallocated_sector_count",
+            "current_pending_sector",
+            "offline_uncorrectable",
+            "udma_crc_error_count",
+        )
+    }
+
+    if health == "FAILED":
+        state, severity, summary = "BAD", 4, f"SMART health failed for {device_name}."
+    elif not available:
+        state, severity, summary = "UNKNOWN", 5, f"SMART unavailable for {device_name}."
+    elif health == "PASSED" and any(value > 0 for value in counters.values()):
+        state, severity, summary = "WARN", 3, f"SMART counters nonzero for {device_name}."
+    elif health == "PASSED":
+        state, severity, summary = "OK", 0, f"SMART health passed for {device_name}."
+    else:
+        state, severity, summary = "UNKNOWN", 5, f"SMART health unknown for {device_name}."
+
+    return _check(
+        state=state,
+        severity=severity,
+        confidence="high" if available else "medium",
+        summary=summary,
+        rule_id=f"storage.smart.{_smart_metric_name(device_name, 'health')}",
+        evidence={
+            "source": "smartctl",
+            "source_type": "derived",
+            "command_class": "read_only",
+            "observed_value": (
+                f"device={device_name} available={device.get('available')} status={device.get('status')} "
+                f"health={device.get('health')} health_code={device.get('health_code')} counters={counters}"
+            ),
+            "collected_at": collected_at,
+        },
+    )
+
+
 def _checks(raw: dict[str, Any]) -> dict[str, Any]:
     collected_at = str(raw.get("collected_at") or "")
     checks: dict[str, Any] = {}
@@ -121,6 +209,9 @@ def _checks(raw: dict[str, Any]) -> dict[str, Any]:
         path = str(target.get("path") or "unknown")
         check_id = _metric_name(path, "health")
         checks[check_id] = _target_check(target, collected_at)
+    for device in _smart_devices(raw):
+        device_name = str(device.get("device") or "unknown")
+        checks[_smart_metric_name(device_name, "health")] = _smart_device_check(device, collected_at)
     return checks
 
 
