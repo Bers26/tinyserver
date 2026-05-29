@@ -3,11 +3,13 @@ from __future__ import annotations
 from tinyserver_collectors.storage_status import (
     MountInfo,
     classify_targets,
+    collect_smart_device,
     collect_storage_status,
     discover_targets,
     is_relevant_mount,
     parse_mounts,
     parse_smartctl_output,
+    smart_fact_path,
 )
 from tinyserver_collectors.storage_status_framework import to_framework_snapshot
 
@@ -267,3 +269,40 @@ def test_framework_snapshot_includes_smart_checks_and_metrics() -> None:
     assert snapshot["metrics"]["storage_disk_nvme0n1_offline_uncorrectable"] == 0
     assert snapshot["metrics"]["storage_disk_nvme0n1_udma_crc_error_count"] == 0
     assert snapshot["metrics"]["storage_disk_nvme0n1_wear_leveling_count"] == 99
+
+
+def test_smart_fact_path_maps_device_to_fact_filename(tmp_path) -> None:
+    assert smart_fact_path("/dev/sdc", tmp_path) == tmp_path / "dev-sdc.smartctl.txt"
+
+
+def test_command_failure_uses_available_smart_fact_file(tmp_path) -> None:
+    fact_file = tmp_path / "dev-sdc.smartctl.txt"
+    fact_file.write_text(
+        """
+SMART overall-health self-assessment test result: PASSED
+  5 Reallocated_Sector_Ct   0x0033   100   100   010    Pre-fail  Always       -       0
+194 Temperature_Celsius     0x0022   064   052   000    Old_age   Always       -       35
+""",
+        encoding="utf-8",
+    )
+
+    def fake_runner(command: list[str], timeout: float) -> tuple[int, str, str]:
+        return 2, "", "permission denied"
+
+    result = collect_smart_device("/dev/sdc", command_runner=fake_runner, fact_dir=tmp_path)
+
+    assert result["status"] == "fact_file"
+    assert result["available"] is True
+    assert result["health"] == "PASSED"
+    assert result["attributes"]["temperature_c"] == 35
+
+
+def test_command_failure_without_smart_fact_file_stays_unavailable(tmp_path) -> None:
+    def fake_runner(command: list[str], timeout: float) -> tuple[int, str, str]:
+        return 2, "", "permission denied"
+
+    result = collect_smart_device("/dev/sdc", command_runner=fake_runner, fact_dir=tmp_path)
+
+    assert result["status"] == "command_failed"
+    assert result["available"] is False
+    assert result["health"] == "UNKNOWN"

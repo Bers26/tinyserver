@@ -21,6 +21,7 @@ OPERATION_STATE_CODES = {"idle": 0, "queued": 1, "running": 2, "slow": 3, "timed
 # code change.
 DEFAULT_TARGETS: tuple[str, ...] = ()
 SMARTCTL_TIMEOUT_SEC = 5.0
+DEFAULT_SMART_FACT_DIR = Path("/opt/serverguard-local/agent-ro/facts/smart")
 
 LOCAL_PERSISTENT_FSTYPES = {
     "btrfs",
@@ -238,14 +239,50 @@ def _default_command_runner(command: list[str], timeout: float) -> tuple[int, st
     return completed.returncode, completed.stdout, completed.stderr
 
 
+def smart_fact_path(device: str, fact_dir: str | Path = DEFAULT_SMART_FACT_DIR) -> Path:
+    device_name = device.strip("/").replace("/", "-")
+    return Path(fact_dir) / f"{device_name}.smartctl.txt"
+
+
+def collect_smart_fact_file(device: str, *, fact_dir: str | Path = DEFAULT_SMART_FACT_DIR) -> dict[str, Any] | None:
+    path = smart_fact_path(device, fact_dir)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return {
+            "device": device,
+            "available": False,
+            "status": "fact_file_unavailable",
+            "error": str(exc),
+            "fact_file": str(path),
+        }
+
+    parsed = parse_smartctl_output(text)
+    available = parsed["health"] != "UNKNOWN"
+    return {
+        "device": device,
+        "available": available,
+        "status": "fact_file" if available else "fact_file_unparseable",
+        "error": None if available else "SMART fact file was unparseable",
+        "fact_file": str(path),
+        **parsed,
+    }
+
+
 def collect_smart_device(
     device: str,
     *,
     command_runner: CommandRunner | None = None,
     timeout_sec: float = SMARTCTL_TIMEOUT_SEC,
+    fact_dir: str | Path = DEFAULT_SMART_FACT_DIR,
 ) -> dict[str, Any]:
     command = ["smartctl", "-H", "-A", device]
     if command_runner is None and shutil.which("smartctl") is None:
+        fact_result = collect_smart_fact_file(device, fact_dir=fact_dir)
+        if fact_result is not None:
+            return {**fact_result, "command": command}
         return {
             "device": device,
             "available": False,
@@ -258,6 +295,9 @@ def collect_smart_device(
     try:
         returncode, stdout, stderr = runner(command, timeout_sec)
     except subprocess.TimeoutExpired:
+        fact_result = collect_smart_fact_file(device, fact_dir=fact_dir)
+        if fact_result is not None:
+            return {**fact_result, "command": command}
         return {
             "device": device,
             "available": False,
@@ -266,6 +306,9 @@ def collect_smart_device(
             "command": command,
         }
     except (OSError, PermissionError) as exc:
+        fact_result = collect_smart_fact_file(device, fact_dir=fact_dir)
+        if fact_result is not None:
+            return {**fact_result, "command": command}
         return {
             "device": device,
             "available": False,
@@ -277,6 +320,10 @@ def collect_smart_device(
     combined_output = stdout + "\n" + stderr
     parsed = parse_smartctl_output(combined_output)
     available = parsed["health"] != "UNKNOWN" or bool(parsed["attributes"])
+    if not available:
+        fact_result = collect_smart_fact_file(device, fact_dir=fact_dir)
+        if fact_result is not None:
+            return {**fact_result, "command": command, "returncode": returncode}
     return {
         "device": device,
         "available": available,
