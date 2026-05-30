@@ -35,7 +35,6 @@ def test_framework_snapshot_has_required_contract_fields_and_checks() -> None:
     assert snapshot["agent_id"] == "interaction.channels.ro"
     assert snapshot["product"] == "Tiny Agent Framework"
     assert snapshot["state"] == "WARN"
-    assert snapshot["raw_state"] == "WARN"
     assert isinstance(snapshot["severity"], int)
     assert snapshot["collected_at"] == "2026-05-30T00:00:00+00:00"
     assert snapshot["summary"]

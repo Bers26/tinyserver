@@ -106,7 +106,6 @@ def to_framework_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "collected_at": str(raw.get("collected_at") or ""),
         "ttl_sec": TTL_SEC,
         "state": state,
-        "raw_state": state,
         "severity": _contract_severity(raw.get("severity_code"), 4),
         "summary": str(raw.get("summary") or "Interaction channels UNKNOWN."),
         "checks": _checks(raw),
