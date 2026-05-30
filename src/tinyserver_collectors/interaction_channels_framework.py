@@ -14,6 +14,19 @@ REQUIRED_CHECK_IDS = {
     "interaction.llm.channel",
     "interaction.voice.channel",
 }
+SOURCE_TYPE_MAP = {
+    "api": "api",
+    "local_http": "api",
+    "command": "command",
+    "file": "file",
+    "derived": "derived",
+    "collector": "derived",
+    "static": "static",
+    "injected_fact": "static",
+    "none": "static",
+    "deferred": "static",
+    "unknown": "static",
+}
 
 
 def _contract_severity(value: Any, default: int = 4) -> int:
@@ -47,15 +60,25 @@ def _metrics(raw: dict[str, Any]) -> dict[str, int | float]:
     }
 
 
+def _schema_source_type(value: Any) -> str:
+    return SOURCE_TYPE_MAP.get(str(value or "unknown"), "static")
+
+
+def _command_class(source_type: str) -> str:
+    if source_type == "file":
+        return "local_file_read"
+    if source_type in {"static", "derived"}:
+        return "local_fact"
+    return "read_only"
+
+
 def _check(raw: dict[str, Any], *, channel_id: str, channel: dict[str, Any]) -> dict[str, Any]:
     state = str(channel.get("state") or "UNKNOWN").upper()
     if state not in {"OK", "WARN", "BAD", "UNKNOWN"}:
         state = "UNKNOWN"
 
-    source_type = str(channel.get("source_type") or "unknown")
-    command_class = "read_only"
-    if source_type == "file":
-        command_class = "local_file_read"
+    source_type = _schema_source_type(channel.get("source_type"))
+    command_class = _command_class(source_type)
 
     return {
         "state": state,
