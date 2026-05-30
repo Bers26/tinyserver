@@ -3,28 +3,13 @@
 from __future__ import annotations
 
 import json
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from tinyserver_collectors.interaction_channels import (
     DEFAULT_BIG_UI_URL,
-    ProbeResult,
     collect_interaction_channels,
+    default_http_probe,
 )
 from tinyserver_collectors.interaction_channels_framework import to_framework_snapshot
-
-
-def default_http_probe(url: str, timeout: int | float) -> ProbeResult:
-    """Run a bounded local HTTP GET and normalize the result."""
-    request = Request(url, method="GET")
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            status_code = int(response.status)
-            return ProbeResult(ok=200 <= status_code < 400, status_code=status_code)
-    except HTTPError as exc:
-        return ProbeResult(ok=False, status_code=int(exc.code), detail="http_error")
-    except (OSError, URLError) as exc:
-        return ProbeResult(ok=False, status_code=None, detail=type(exc).__name__)
 
 
 def collect_with_default_probe(timeout: int | float = 3) -> dict:

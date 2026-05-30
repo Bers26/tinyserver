@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 BOOL_TRUE = 1
 BOOL_FALSE = 0
@@ -33,6 +35,19 @@ class ProbeResult:
 
 
 HttpProbe = Callable[[str, int | float], ProbeResult]
+
+
+def default_http_probe(url: str, timeout: int | float) -> ProbeResult:
+    """Run a bounded local HTTP GET and normalize the result."""
+    request = Request(url, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            status_code = int(response.status)
+            return ProbeResult(ok=200 <= status_code < 400, status_code=status_code)
+    except HTTPError as exc:
+        return ProbeResult(ok=False, status_code=int(exc.code), detail="http_error")
+    except (OSError, URLError) as exc:
+        return ProbeResult(ok=False, status_code=None, detail=type(exc).__name__)
 
 
 def utc_now_iso() -> str:

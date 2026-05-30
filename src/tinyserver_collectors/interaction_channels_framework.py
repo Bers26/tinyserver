@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from tinyserver_collectors.interaction_channels import collect_interaction_channels
+from tinyserver_collectors.interaction_channels import (
+    DEFAULT_BIG_UI_URL,
+    collect_interaction_channels,
+    default_http_probe,
+)
 
 TTL_SEC = 300
 RULESET_VERSION = "1.0"
@@ -143,4 +147,9 @@ def to_framework_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def collect(output_root: object | None = None) -> dict[str, Any]:
-    return to_framework_snapshot(collect_interaction_channels())
+    return to_framework_snapshot(
+        collect_interaction_channels(
+            big_ui_probe=default_http_probe,
+            big_ui_url=DEFAULT_BIG_UI_URL,
+        )
+    )

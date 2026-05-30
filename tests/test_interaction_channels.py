@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import tinyserver_collectors.interaction_channels_framework as interaction_channels_framework
+from tinyserver_collectors import interaction_channels
 from tinyserver_collectors.interaction_channels import ProbeResult, collect_interaction_channels
 from tinyserver_collectors.interaction_channels_cli import main as interaction_cli_main
 from tinyserver_collectors.interaction_channels_framework import to_framework_snapshot
@@ -76,6 +78,24 @@ def test_big_ui_ok_fixture_makes_big_ui_check_ok() -> None:
     snapshot = to_framework_snapshot(raw)
 
     assert raw["channels"]["big_ui"]["state"] == "OK"
+    assert snapshot["checks"]["interaction.big_ui.channel"]["state"] == "OK"
+    assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["source_type"] == "api"
+    assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["command_class"] == "api_read"
+
+
+def test_framework_collect_uses_shared_big_ui_probe(monkeypatch) -> None:
+    calls = []
+
+    def fake_probe(url: str, timeout: int | float) -> ProbeResult:
+        calls.append((url, timeout))
+        return ProbeResult(ok=True, status_code=200)
+
+    monkeypatch.setattr(interaction_channels_framework, "default_http_probe", fake_probe)
+
+    snapshot = interaction_channels_framework.collect()
+
+    assert calls
+    assert calls[0][0] == interaction_channels.DEFAULT_BIG_UI_URL
     assert snapshot["checks"]["interaction.big_ui.channel"]["state"] == "OK"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["source_type"] == "api"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["command_class"] == "api_read"
