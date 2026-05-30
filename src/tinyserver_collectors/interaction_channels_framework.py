@@ -65,11 +65,15 @@ def _schema_source_type(value: Any) -> str:
 
 
 def _command_class(source_type: str) -> str:
+    if source_type == "api":
+        return "api_read"
+    if source_type == "command":
+        return "read_only"
     if source_type == "file":
         return "local_file_read"
-    if source_type in {"static", "derived"}:
-        return "local_fact"
-    return "read_only"
+    if source_type == "derived":
+        return "derived"
+    return "static"
 
 
 def _check(raw: dict[str, Any], *, channel_id: str, channel: dict[str, Any]) -> dict[str, Any]:

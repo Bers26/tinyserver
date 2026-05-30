@@ -14,6 +14,7 @@ REQUIRED_CHECKS = {
     "interaction.voice.channel",
 }
 ALLOWED_SOURCE_TYPES = {"api", "command", "derived", "file", "static"}
+ALLOWED_COMMAND_CLASSES = {"api_read", "derived", "local_file_read", "read_only", "static"}
 
 
 def test_raw_collector_default_is_read_only_safe_unknown_warn_without_secrets() -> None:
@@ -47,7 +48,7 @@ def test_framework_snapshot_has_required_contract_fields_and_checks() -> None:
 
     for check in snapshot["checks"].values():
         assert {"state", "severity", "confidence", "summary", "rule_id", "ruleset_version", "evidence"} <= set(check)
-        assert check["evidence"]["command_class"] in {"read_only", "local_file_read", "local_fact"}
+        assert check["evidence"]["command_class"] in ALLOWED_COMMAND_CLASSES
         assert check["evidence"]["source_type"] in ALLOWED_SOURCE_TYPES
 
 
@@ -77,6 +78,8 @@ def test_big_ui_ok_fixture_makes_big_ui_check_ok() -> None:
     assert raw["channels"]["big_ui"]["state"] == "OK"
     assert snapshot["checks"]["interaction.big_ui.channel"]["state"] == "OK"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["source_type"] == "api"
+    assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["command_class"] == "api_read"
+
 
 def test_framework_check_evidence_source_types_are_schema_valid() -> None:
     raw = collect_interaction_channels(
@@ -87,11 +90,17 @@ def test_framework_check_evidence_source_types_are_schema_valid() -> None:
     snapshot = to_framework_snapshot(raw)
 
     source_types = {check["evidence"]["source_type"] for check in snapshot["checks"].values()}
+    command_classes = {check["evidence"]["command_class"] for check in snapshot["checks"].values()}
     assert source_types <= ALLOWED_SOURCE_TYPES
+    assert command_classes <= ALLOWED_COMMAND_CLASSES
     assert snapshot["checks"]["interaction.telegram.channel"]["evidence"]["source_type"] == "static"
+    assert snapshot["checks"]["interaction.telegram.channel"]["evidence"]["command_class"] == "static"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["source_type"] == "api"
+    assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["command_class"] == "api_read"
     assert snapshot["checks"]["interaction.llm.channel"]["evidence"]["source_type"] == "static"
+    assert snapshot["checks"]["interaction.llm.channel"]["evidence"]["command_class"] == "static"
     assert snapshot["checks"]["interaction.voice.channel"]["evidence"]["source_type"] == "static"
+    assert snapshot["checks"]["interaction.voice.channel"]["evidence"]["command_class"] == "static"
 
 
 
