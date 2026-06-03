@@ -90,3 +90,93 @@ def test_power_cli_generates_valid_json(monkeypatch, capsys) -> None:
 
     assert snapshot["agent_id"] == "power.status.ro"
     assert snapshot["checks"]
+
+
+
+def _service_payload(**overrides):
+    payload = {
+        "active_state": "active",
+        "sub_state": "running",
+        "main_pid": 123,
+        "tasks_current": 10,
+        "limit_nofile_systemd": 4096,
+        "limit_nofile_soft": 1024,
+        "limit_nofile_hard": 4096,
+        "fd_count_available": True,
+        "fd_count": 20,
+        "fd_count_error": "",
+        "fd_usage_ratio": 20 / 1024,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_power_diagnoses_apcaccess_connection_reset_as_service_layer(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "tinyserver_collectors.power_status.run_apcaccess",
+        lambda: (1, "Connection reset by peer", ""),
+    )
+
+    raw = collect_power_status(
+        service_status=_service_payload(tasks_current=1019, fd_count=1023, fd_usage_ratio=1023 / 1024)
+    )
+    snapshot = to_framework_snapshot(raw)
+
+    assert raw["diagnosis_layer"]["likely_layer"] == "service"
+    assert raw["service"]["fd_usage_ratio"] > 0.99
+    assert snapshot["checks"]["power.apcupsd.fd_usage"]["state"] in {"WARN", "BAD"}
+    joined = (raw["diagnosis_layer"]["reason"] + " " + snapshot["checks"]["power.apcupsd.fd_usage"]["summary"]).lower()
+    assert "apcupsd" in joined
+    assert "fd" in joined
+    assert "tasks" in joined
+
+
+def test_power_fd_near_soft_limit_marks_service_exhaustion() -> None:
+    raw = collect_power_status(
+        ONLINE_SAMPLE,
+        service_status=_service_payload(tasks_current=1019, fd_count=1023, fd_usage_ratio=1023 / 1024),
+    )
+    snapshot = to_framework_snapshot(raw)
+
+    assert snapshot["checks"]["power.apcupsd.fd_usage"]["state"] in {"WARN", "BAD"}
+    assert snapshot["checks"]["power.apcupsd.tasks"]["state"] == "WARN"
+
+
+def test_power_unreadable_fd_count_is_unknown_not_zero() -> None:
+    raw = collect_power_status(
+        ONLINE_SAMPLE,
+        service_status=_service_payload(fd_count_available=False, fd_count=None, fd_count_error="permission denied", fd_usage_ratio=None),
+    )
+    snapshot = to_framework_snapshot(raw)
+
+    service = raw["service"]
+    assert service["fd_count_available"] is False
+    assert service["fd_count"] is None
+    assert service["fd_count_error"]
+    assert snapshot["checks"]["power.apcupsd.fd_usage"]["state"] == "UNKNOWN"
+
+
+def test_power_service_running_with_online_sample_keeps_ok() -> None:
+    raw = collect_power_status(ONLINE_SAMPLE, service_status=_service_payload())
+    snapshot = to_framework_snapshot(raw)
+
+    assert raw["provider"] == "apcupsd/apcaccess"
+    assert raw["command"]["apcaccess_ok"] is True
+    assert raw["diagnosis_layer"]["likely_layer"] == "ups_hardware"
+    assert snapshot["state"] == "OK"
+    assert snapshot["checks"]["power.apcupsd.service"]["state"] == "OK"
+    assert snapshot["checks"]["power.apcupsd.command"]["state"] == "OK"
+    assert snapshot["checks"]["power.apcupsd.fd_usage"]["state"] == "OK"
+
+
+def test_power_failed_apcaccess_has_command_error_class(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "tinyserver_collectors.power_status.run_apcaccess",
+        lambda: (1, "", "Connection reset by peer"),
+    )
+
+    raw = collect_power_status(service_status=_service_payload())
+
+    assert raw["command"]["apcaccess_ok"] is False
+    assert raw["command"]["command_error_class"] == "connection_reset"
+    assert raw["command_error_class"] == "connection_reset"
