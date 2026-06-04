@@ -44,6 +44,13 @@ def _metric_subset(raw: dict[str, Any]) -> dict[str, Any]:
         "socks_gstatic_time_ms",
         "transport_success_count",
         "transport_checked_count",
+        "ru_gov_checked_count",
+        "ru_gov_reachable_count",
+        "ru_gov_success_rate",
+        "ru_gov_direct_route_count",
+        "ru_gov_vpn_leak_count",
+        "ru_gov_reachable_value",
+        "ru_gov_direct_route_value",
         "freshness_code",
         "operation_state_code",
     ]
@@ -150,6 +157,101 @@ def _transport_path_check(raw: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+
+def _list_value(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _ru_gov_reachability_check(raw: dict[str, Any]) -> dict[str, Any]:
+    checked = _int_value(raw.get("ru_gov_checked_count"), 0)
+    reachable = _int_value(raw.get("ru_gov_reachable_count"), 0)
+    reachable_value = _int_value(raw.get("ru_gov_reachable_value"), -1)
+    failed_targets = _list_value(raw.get("ru_gov_failed_targets"))
+
+    if checked <= 0 or reachable_value == -1:
+        state, severity, confidence = "UNKNOWN", 5, "low"
+        summary = "RU/gov direct reachability was not checked."
+    elif reachable_value == 1:
+        state, severity, confidence = "OK", 0, "high"
+        summary = f"RU/gov direct reachability OK: {reachable}/{checked} targets reachable."
+    else:
+        state, severity, confidence = "WARN", 3, "high"
+        summary = f"RU/gov direct reachability degraded: {reachable}/{checked} targets reachable."
+
+    return _check(
+        state=state,
+        severity=severity,
+        confidence=confidence,
+        summary=summary,
+        rule_id="network.transport.ru_gov_reachability",
+        evidence=_evidence(
+            raw,
+            observed_value=(
+                f"reachable={reachable} checked={checked} failed_targets={failed_targets} "
+                f"split={raw.get('reachability_split_hint')}"
+            ),
+        ),
+    )
+
+
+def _ru_gov_route_policy_check(raw: dict[str, Any]) -> dict[str, Any]:
+    checked = _int_value(raw.get("ru_gov_checked_count"), 0)
+    direct = _int_value(raw.get("ru_gov_direct_route_count"), 0)
+    leaks = _int_value(raw.get("ru_gov_vpn_leak_count"), 0)
+    route_value = _int_value(raw.get("ru_gov_direct_route_value"), -1)
+    leak_targets = _list_value(raw.get("ru_gov_route_leak_targets"))
+
+    if checked <= 0 or route_value == -1:
+        state, severity, confidence = "UNKNOWN", 5, "medium"
+        summary = "RU/gov direct route policy evidence is unknown."
+    elif leaks > 0:
+        state, severity, confidence = "BAD", 4, "high"
+        summary = f"RU/gov route leak detected: {leaks}/{checked} targets appear routed via VPN-like interfaces."
+    elif route_value == 1:
+        state, severity, confidence = "OK", 0, "high"
+        summary = f"RU/gov direct route policy OK: {direct}/{checked} targets use direct-like routes."
+    else:
+        state, severity, confidence = "WARN", 3, "medium"
+        summary = f"RU/gov direct route policy incomplete: {direct}/{checked} targets use direct-like routes."
+
+    return _check(
+        state=state,
+        severity=severity,
+        confidence=confidence,
+        summary=summary,
+        rule_id="network.transport.ru_gov_route_policy",
+        evidence=_evidence(
+            raw,
+            observed_value=(
+                f"direct={direct} checked={checked} vpn_leaks={leaks} "
+                f"leak_targets={leak_targets} route_policy={raw.get('route_policy_hint')}"
+            ),
+        ),
+    )
+
+
+def _reachability_split_check(raw: dict[str, Any]) -> dict[str, Any]:
+    hint = str(raw.get("reachability_split_hint") or "unknown")
+    if hint == "external_and_ru_gov_ok":
+        state, severity, confidence = "OK", 0, "high"
+        summary = "External and RU/gov reachability are both OK."
+    elif hint in {"no_evidence", "unknown"}:
+        state, severity, confidence = "UNKNOWN", 5, "low"
+        summary = f"Reachability split evidence is {hint}."
+    else:
+        state, severity, confidence = "WARN", 3, "medium"
+        summary = f"Reachability split hint: {hint}."
+
+    return _check(
+        state=state,
+        severity=severity,
+        confidence=confidence,
+        summary=summary,
+        rule_id="network.transport.reachability_split",
+        evidence=_evidence(raw, observed_value=f"reachability_split_hint={hint}"),
+    )
+
+
 def _checks(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "github_api": _target_check(
@@ -170,6 +272,9 @@ def _checks(raw: dict[str, Any]) -> dict[str, Any]:
         ),
         "socks_proxy": _socks_proxy_check(raw),
         "transport_path": _transport_path_check(raw),
+        "ru_gov_reachability": _ru_gov_reachability_check(raw),
+        "ru_gov_route_policy": _ru_gov_route_policy_check(raw),
+        "reachability_split": _reachability_split_check(raw),
     }
 
 
