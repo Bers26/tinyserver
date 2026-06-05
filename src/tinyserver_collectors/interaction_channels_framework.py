@@ -54,6 +54,9 @@ def _metrics(raw: dict[str, Any]) -> dict[str, int | float]:
         "channels_bad",
         "channels_unknown",
         "channels_deferred",
+        "channels_critical_unknown",
+        "channels_not_configured",
+        "channels_actionable_unknown",
         "operation_state_code",
     ]
     metrics = {key: raw.get(key, payload.get(key)) for key in keys}

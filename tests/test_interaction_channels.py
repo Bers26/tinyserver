@@ -27,6 +27,13 @@ def test_raw_collector_default_is_read_only_safe_unknown_warn_without_secrets() 
     assert raw["state"] == "WARN"
     assert raw["channels"]["telegram"]["state"] == "UNKNOWN"
     assert raw["channels"]["telegram"]["source"] == "not_configured"
+    assert raw["channels_critical_unknown"] == 2
+    assert raw["channels_not_configured"] == 1
+    assert raw["channels_deferred"] == 1
+    assert raw["channels_actionable_unknown"] == 2
+    assert "critical_unknown=2" in raw["summary"]
+    assert "not_configured=1" in raw["summary"]
+    assert "deferred=1" in raw["summary"]
     assert "token" not in payload
     assert "secret" not in payload
 
@@ -65,6 +72,9 @@ def test_required_metrics_are_present() -> None:
         "channels_bad",
         "channels_unknown",
         "channels_deferred",
+        "channels_critical_unknown",
+        "channels_not_configured",
+        "channels_actionable_unknown",
         "operation_state_code",
     ):
         assert isinstance(metrics[key], int)
@@ -78,6 +88,11 @@ def test_big_ui_ok_fixture_makes_big_ui_check_ok() -> None:
     snapshot = to_framework_snapshot(raw)
 
     assert raw["channels"]["big_ui"]["state"] == "OK"
+    assert raw["state"] == "WARN"
+    assert raw["channels_critical_unknown"] == 1
+    assert raw["channels_not_configured"] == 1
+    assert raw["channels_deferred"] == 1
+    assert "critical_unknown=1" in raw["summary"]
     assert snapshot["checks"]["interaction.big_ui.channel"]["state"] == "OK"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["source_type"] == "api"
     assert snapshot["checks"]["interaction.big_ui.channel"]["evidence"]["command_class"] == "api_read"
@@ -124,14 +139,16 @@ def test_framework_check_evidence_source_types_are_schema_valid() -> None:
 
 
 
-def test_missing_unconfigured_telegram_does_not_fail_collector() -> None:
+def test_missing_unconfigured_telegram_and_deferred_voice_do_not_warn_when_critical_channels_ok() -> None:
     raw = collect_interaction_channels(
         big_ui_probe=lambda url, timeout: ProbeResult(ok=True, status_code=200),
         llm_status={"configured": True, "ok": True, "source_type": "injected_fact"},
     )
 
     assert raw["channels"]["telegram"]["state"] == "UNKNOWN"
-    assert raw["state"] == "WARN"
+    assert raw["state"] == "OK"
+    assert raw["channels_not_configured"] == 1
+    assert raw["channels_actionable_unknown"] == 0
     assert raw["state"] != "BAD"
 
 

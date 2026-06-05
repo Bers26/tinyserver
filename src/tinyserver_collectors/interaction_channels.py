@@ -117,12 +117,16 @@ def _status_from_mapping(
     critical = channel in CRITICAL_CHANNELS
 
     if deferred:
+        configured = False if configured is None else configured
         state = "UNKNOWN"
         summary = f"{channel} channel is deferred."
     elif ok is True:
         state = "OK"
         summary = f"{channel} channel is available."
         configured = True if configured is None else configured
+    elif configured is False:
+        state = "UNKNOWN"
+        summary = f"{channel} channel is not configured."
     elif ok is False:
         if configured is True:
             state = "BAD"
@@ -159,7 +163,7 @@ def _status_from_mapping(
 def _unknown_channel(channel: str, *, source_type: str, source: str, deferred: bool = False) -> dict[str, Any]:
     return _status_from_mapping(
         channel,
-        {"configured": None, "ok": None, "deferred": deferred, "source_type": source_type, "source": source},
+        {"configured": False if source == "not_configured" else None, "ok": None, "deferred": deferred, "source_type": source_type, "source": source},
         default_source_type=source_type,
         default_source=source,
     )
@@ -193,25 +197,57 @@ def classify_state(channels: Mapping[str, Mapping[str, Any]], *, collector_error
     ):
         return "BAD", STATE_CODES["BAD"], "critical", SEVERITY_CODES["critical"]
 
-    implemented = [channel for name, channel in channels.items() if name != "voice"]
-    voice = channels.get("voice", {})
-    non_voice_unknown = any(channel.get("state") != "OK" for channel in implemented)
-    if not non_voice_unknown and voice.get("state") in {"UNKNOWN", "OK"}:
-        return "OK", STATE_CODES["OK"], "normal", SEVERITY_CODES["normal"]
-    return "WARN", STATE_CODES["WARN"], "warning", SEVERITY_CODES["warning"]
+    if any(
+        channel.get("critical") is True
+        and channel.get("deferred") is not True
+        and channel.get("state") in {"BAD", "UNKNOWN"}
+        for channel in channels.values()
+    ):
+        return "WARN", STATE_CODES["WARN"], "warning", SEVERITY_CODES["warning"]
 
+    if any(
+        channel.get("critical") is not True
+        and channel.get("configured") is True
+        and channel.get("state") == "BAD"
+        for channel in channels.values()
+    ):
+        return "WARN", STATE_CODES["WARN"], "warning", SEVERITY_CODES["warning"]
+
+    return "OK", STATE_CODES["OK"], "normal", SEVERITY_CODES["normal"]
 
 def _counts(channels: Mapping[str, Mapping[str, Any]]) -> dict[str, int]:
-    states = [str(channel.get("state") or "UNKNOWN").upper() for channel in channels.values()]
+    values = list(channels.values())
+    states = [str(channel.get("state") or "UNKNOWN").upper() for channel in values]
+    critical_unknown = sum(
+        1
+        for channel in values
+        if channel.get("critical") is True
+        and channel.get("deferred") is not True
+        and str(channel.get("state") or "UNKNOWN").upper() == "UNKNOWN"
+    )
+    not_configured = sum(
+        1
+        for channel in values
+        if channel.get("configured") is False and channel.get("deferred") is not True
+    )
+    actionable_unknown = sum(
+        1
+        for channel in values
+        if channel.get("deferred") is not True
+        and str(channel.get("state") or "UNKNOWN").upper() == "UNKNOWN"
+        and (channel.get("critical") is True or channel.get("configured") is True)
+    )
     return {
         "channels_total": len(states),
         "channels_ok": states.count("OK"),
         "channels_warn": states.count("WARN"),
         "channels_bad": states.count("BAD"),
         "channels_unknown": states.count("UNKNOWN"),
-        "channels_deferred": sum(1 for channel in channels.values() if channel.get("deferred") is True),
+        "channels_deferred": sum(1 for channel in values if channel.get("deferred") is True),
+        "channels_critical_unknown": critical_unknown,
+        "channels_not_configured": not_configured,
+        "channels_actionable_unknown": actionable_unknown,
     }
-
 
 def collect_interaction_channels(
     *,
@@ -242,7 +278,7 @@ def collect_interaction_channels(
                 default_source="llm_status",
             )
             if llm_status is not None
-            else _unknown_channel("llm", source_type="none", source="not_configured"),
+            else _unknown_channel("llm", source_type="none", source="llm_status"),
             "voice": _status_from_mapping(
                 "voice",
                 voice_status if isinstance(voice_status, Mapping) else {"ok": voice_status},
@@ -276,7 +312,7 @@ def collect_interaction_channels(
             "state_code": state_code,
             "severity": severity,
             "severity_code": severity_code,
-            "summary": f"Interaction channels {state}: ok={counts['channels_ok']}, bad={counts['channels_bad']}, unknown={counts['channels_unknown']}.",
+            "summary": f"Interaction channels {state}: ok={counts['channels_ok']}, bad={counts['channels_bad']}, critical_unknown={counts['channels_critical_unknown']}, not_configured={counts['channels_not_configured']}, deferred={counts['channels_deferred']}.",
             "freshness": "fresh",
             "freshness_code": FRESHNESS_CODES["fresh"],
             "operation_state": "failed" if facts.get("collector_error") else "completed",
