@@ -131,6 +131,8 @@ def _gateway_ping_check(raw: dict[str, Any]) -> dict[str, Any]:
     loss = _float_value(raw.get("gateway_ping_loss_percent"))
     avg_ms = _float_value(raw.get("gateway_ping_ms_avg"))
     max_ms = _float_value(raw.get("gateway_ping_ms_max"))
+    dns_checked = _int_value(raw.get("dns_checked_domains_count"), 0)
+    dns_success = _int_value(raw.get("dns_success_count"), 0)
 
     if gateway_present == 0:
         state, severity, confidence = "BAD", 4, "high"
@@ -140,13 +142,20 @@ def _gateway_ping_check(raw: dict[str, Any]) -> dict[str, Any]:
         summary = "Gateway ping state unknown."
     elif loss == 0 and ping_ok == 1:
         state, severity, confidence = "OK", 0, "high"
-        summary = f"Gateway ping OK: loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
+        summary = f"Gateway ping OK: gateway_icmp_loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
+    elif (loss > 20 or ping_ok == 0) and dns_success > 0:
+        state, severity, confidence = "WARN", 2, "medium"
+        summary = (
+            "Gateway ICMP degraded/unreliable: "
+            f"gateway_icmp_loss={loss}%, avg={avg_ms} ms, max={max_ms} ms. "
+            f"DNS still resolves {dns_success}/{dns_checked} targets."
+        )
     elif loss > 20 or ping_ok == 0:
         state, severity, confidence = "WARN", 3, "high"
-        summary = f"Gateway ping degraded: loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
+        summary = f"Gateway ping degraded: gateway_icmp_loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
     else:
         state, severity, confidence = "WARN", 2, "high"
-        summary = f"Gateway ping has minor loss/latency: loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
+        summary = f"Gateway ping has minor loss/latency: gateway_icmp_loss={loss}%, avg={avg_ms} ms, max={max_ms} ms."
 
     return _check(
         state=state,
@@ -159,7 +168,7 @@ def _gateway_ping_check(raw: dict[str, Any]) -> dict[str, Any]:
             source="ping gateway",
             source_type="command",
             command_class="read_only",
-            observed_value=f"gateway_present={gateway_present} ping_ok={ping_ok} loss_percent={loss} avg_ms={avg_ms} max_ms={max_ms}",
+            observed_value=f"gateway_present={gateway_present} ping_ok={ping_ok} gateway_icmp_loss_percent={loss} avg_ms={avg_ms} max_ms={max_ms} dns_success={dns_success} dns_checked={dns_checked}",
         ),
     )
 
@@ -281,7 +290,7 @@ def _summary(raw: dict[str, Any]) -> str:
     loss = raw.get("gateway_ping_loss_percent")
     dns_success = raw.get("dns_success_count")
     speed = raw.get("speed_mbps")
-    return f"Network link {state}: iface={iface}, speed={speed}Mb/s, loss={loss}%, dns_success={dns_success}."
+    return f"Network link {state}: iface={iface}, speed={speed}Mb/s, gateway_icmp_loss={loss}%, dns_success={dns_success}."
 
 
 def to_framework_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
