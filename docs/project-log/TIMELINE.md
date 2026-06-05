@@ -24,3 +24,15 @@
 | 2026-05-25 | SGTS-129 | ServerGuard consumer | PR #5 synced live; checks dict preserved | OK | producer checks |
 | 2026-05-25 | SGTS-133 | network.link.ro | PR #16 merged to add network checks dict | OK | live sync |
 | 2026-05-25 | SGTS-134 | network.link.ro | Live latest and ServerGuard consumer show keyed network checks dict | OK | Prometheus exporter |
+
+| 2026-06-05 | post-SGTS-134 compact sync | Prometheus projection | Registry-driven Prometheus projection is done and no longer next work | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | storage.status.ro | storage.status.ro collector done after old queued TASK-SG-CODEX-002 | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | service.health.ro | service.health.ro collector done | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | power.status.ro | power.status.ro UPS diagnostics done | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | interaction.channels.ro | interaction.channels.ro done, normalized, and using shared Big UI probe | OK | ServerGuard/live triage if needed |
+| 2026-06-05 | post-SGTS-134 compact sync | network.transport.ro | network.transport.ro collector done | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | RU/gov evidence | RU/gov direct route evidence done | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | framework exposure | network.transport.ro framework exposure done | OK | maintain docs |
+| 2026-06-05 | post-SGTS-134 compact sync | live registry visibility | network.transport.ro live registry visibility done | OK | ServerGuard reality docs |
+| 2026-06-05 | post-SGTS-134 compact sync | network.link.ro | gateway_icmp_loss wording done at 8f7a9c4 | OK | maintain docs |
+| 2026-06-05 | MOVE 626 | handoff docs | Handoff docs sync to current main 8f7a9c4 | OK | verify before next task |

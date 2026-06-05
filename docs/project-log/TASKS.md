@@ -26,4 +26,29 @@
 | TASK-SG-CONSUMER-001 | 2 | Prefer full Agent RO registry in ServerGuard consumer | GitHub connector + Claude Code validation | done | ServerGuard PR #4 merged and live; consumer reads registries/agent-ro-full.json primary | checks dict consumer |
 | TASK-SG-CONSUMER-002 | 2 | Preserve Agent RO checks dict in ServerGuard consumer | GitHub connector + Claude Code validation | done | ServerGuard PR #5 merged and live; checks dict preserved through consumer | Prometheus exporter |
 | TASK-SG-PROM-001 | 2 | Implement registry-driven Prometheus text projection MVP | GitHub connector + Claude Code validation | done | PR #17 merged in 78db512; tests pass; live CLI emits Agent RO metrics for serverguard.server, power.status, network.link | storage.status.ro |
-| TASK-SG-CODEX-002 | 2 | Implement storage.status.ro collector | Codex/GitHub connector + Claude Code validation | queued | Read-only storage latest/checks/metrics for approved mounts | next |
+| TASK-SG-CODEX-002 | 2 | Implement storage.status.ro collector | Codex/GitHub connector + Claude Code validation | historical-stale | Old queued entry; superseded by 2026-06-05 compact sync where storage.status.ro is marked done | see compact sync section |
+
+## 2026-06-05 compact sync / completed after SGTS-134
+
+Completed after the old SGTS-134 handoff context:
+
+| Task | Tier | Scope | Executor | Status | DoD | Next |
+|---|---:|---|---|---|---|---|
+| TASK-SG-CODEX-002 | 2 | storage.status.ro collector | Codex/GitHub connector + Claude Code validation | done | Read-only storage latest/checks/metrics implemented after old queued entry | maintain docs |
+| TASK-SG-CODEX-003 | 2 | service.health.ro collector | Codex/GitHub connector + Claude Code validation | done | Service health read-only collector implemented | maintain docs |
+| TASK-SG-CODEX-004 | 2 | power.status.ro UPS diagnostic evidence | Codex/GitHub connector + Claude Code validation | done | UPS diagnostic evidence added to Power RO | maintain docs |
+| TASK-SG-CODEX-005 | 2 | interaction.channels.ro collector and framework exposure | Codex/GitHub connector + Claude Code validation | done | Interaction channels implemented, normalized, and exposed through framework pattern | ServerGuard/live triage if needed |
+| TASK-SG-CODEX-006 | 2 | network.transport.ro collector | Codex/GitHub connector + Claude Code validation | done | Network transport collector implemented | maintain docs |
+| TASK-SG-CODEX-007 | 2 | network.transport.ro RU/gov route evidence | Codex/GitHub connector + Claude Code validation | done | RU/gov direct route evidence added | maintain docs |
+| TASK-SG-CODEX-008 | 2 | network.transport.ro framework exposure | Codex/GitHub connector + Claude Code validation | done | Framework snapshot exposes network transport evidence | maintain docs |
+| TASK-SG-RUNTIME-002 | 2 | network.transport.ro live registry visibility | Claude Code validation | done | Live Agent RO full registry includes network.transport.ro | ServerGuard reality docs |
+| TASK-SG-CODEX-009 | 2 | network.link.ro gateway_icmp_loss wording fix | Codex/GitHub connector + Claude Code validation | done | Summary wording uses gateway_icmp_loss instead of ambiguous bare loss | maintain docs |
+
+Current next candidates, queued/deferred rather than active commands:
+
+| Task | Tier | Scope | Executor | Status | DoD | Next |
+|---|---:|---|---|---|---|---|
+| TASK-TINY-DOCS-001 | 1 | Keep handoff docs/current task state synchronized | Codex or Claude Code | queued | Handoff docs match current HEAD/upstream and completed collector state | verify before edit |
+| TASK-TINY-NETPERF-001 | 1 | Design network.performance.ro read-only collector | Codex/GitHub connector | deferred | Design matches existing collector/framework/CLI/test pattern | source hygiene first |
+| TASK-TINY-VPNPERF-001 | 1 | Design VPN node ping/top-3/speed measurement read-only collector | Codex/GitHub connector | deferred | Read-only VPN node performance design without runtime changes | source hygiene first |
+| TASK-TINY-DIAG-001 | 1 | Diagnostic enrichment pattern across thin agents | Codex/GitHub connector | deferred | Reusable diagnostic enrichment pattern documented before broad collector edits | source hygiene first |

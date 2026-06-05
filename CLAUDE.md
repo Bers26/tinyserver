@@ -109,11 +109,27 @@ deploy
 history rewrite
 ```
 
-## 6. Current next work
+## 6. Current repo state and next work
+
+Current repo state:
 
 ```text
-TASK-AGENTS-001: keep AGENTS.md and CLAUDE.md aligned.
-TASK-SG-DESIGN-001: add docs/runtime/telemetry-numeric-semantics-v0.1.md.
-Then design Prometheus projection.
-Then start network.link.ro.
+path: /home/bers/tinyserver
+branch: main
+HEAD: 8f7a9c4
+upstream: origin/main
+upstream HEAD: 8f7a9c4
+Agent RO collector set: serverguard.server.ro, power.status.ro, network.link.ro, network.transport.ro, storage.status.ro, service.health.ro, interaction.channels.ro
+recent targeted pytest: 43 passed in 0.09s
+old project-log entries before SGTS-134 are historical, not next-task truth
+```
+
+Current next useful work:
+
+```text
+Keep handoff docs synchronized with current code state.
+Design network.performance.ro / VPN performance only after source/reality hygiene.
+interaction.channels.ro triage should happen in ServerGuard/live context.
+BB-UX-001 deterministic simple-language fallback is ServerGuard-side, not tinyserver collector code unless a FactPack contract change is scoped.
+Do not restart old storage.status.ro queued task.
 ```

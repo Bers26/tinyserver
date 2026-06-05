@@ -23,13 +23,18 @@ Number every project move:
 ```text
 path: /home/bers/tinyserver
 remote: git@github.com:Bers26/tinyserver.git
-current pushed main: 1d02c9d Add project log
+branch: main
+HEAD: 8f7a9c4
+upstream: origin/main
+current pushed main: 8f7a9c4 Clarify network link gateway ICMP loss wording
+previous pushed main: 1d02c9d Add project log (historical)
 initial commit: 6a5bc73 Initialize tinyserver repository
 project log: docs/project-log/
 ```
 
 Google Sheet is not source of truth.
 Repo Markdown is source of truth.
+Old project-log entries before SGTS-134 are historical unless revalidated against current HEAD/upstream.
 
 Before technical work in this repo, read:
 
@@ -142,14 +147,15 @@ Prometheus metrics prefix is agent_ro_ with contour label
 ## 7. Immediate next work
 
 ```text
-1. Close this docs instruction task.
-2. Expand AGENTS.md using this instruction, but keep it short.
-3. Add docs/runtime/telemetry-numeric-semantics-v0.1.md.
-4. Then design Prometheus projection.
-5. Then start network.link.ro.
+1. Verify live state before patch.
+2. Use current HEAD/upstream.
+3. If task is docs sync, edit docs only.
+4. If task is new collector, use existing collector/framework/CLI/test pattern.
+5. Likely next technical candidates are network.performance.ro design, VPN node performance read-only design, or collector diagnostic enrichment.
+6. ServerGuard branch reconcile / BB-UX / interaction.channels runtime triage are not tinyserver-only tasks.
 ```
 
-Do not start network.link.ro before numeric semantics.
+Do not restart old storage.status.ro queued task. Prometheus projection exists and is no longer next work.
 
 ## 8. Numeric telemetry decisions
 
@@ -195,21 +201,25 @@ SAFE export must exclude env, secrets, tokens, docker auth, ssh keys and user da
 
 ## 11. Current task state
 
-Completed:
+Completed recent collector state:
 
 ```text
-tinyserver deploy key generated
-deploy key added by user with write access
-repo cloned with explicit key
-initial commit pushed
-docs/project-log pushed
-project-log verification passed
+storage.status.ro implemented after old TASK-SG-CODEX-002 queued entry
+service.health.ro implemented
+power.status.ro UPS diagnostic evidence added
+interaction.channels.ro implemented and normalized
+network.transport.ro implemented with RU/gov direct route evidence
+network.transport.ro exposed in framework snapshot
+network.transport.ro wired live through Agent RO full registry
+network.link.ro summary wording now uses gateway_icmp_loss
+Prometheus projection exists
+targeted pytest proof: 43 passed in 0.09s
 ```
 
-Open next task:
+Open next task style:
 
 ```text
-TASK-NEXT-DIALOG-001: commit this instruction
-then TASK-AGENTS-001
-then TASK-SG-DESIGN-001 numeric semantics
+Use current HEAD/upstream and task-specific verification.
+Docs sync remains docs-only.
+New collector work should follow existing collector/framework/CLI/test pattern.
 ```
