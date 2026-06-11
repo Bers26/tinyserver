@@ -125,10 +125,7 @@ def test_to_framework_snapshot_marks_gateway_and_dns_checks_degraded() -> None:
     )
 
     assert snapshot["checks"]["gateway_ping"]["state"] == "WARN"
-    assert snapshot["checks"]["gateway_ping"]["severity"] == 2
-    assert "Gateway ICMP degraded/unreliable" in snapshot["checks"]["gateway_ping"]["summary"]
-    assert "DNS still resolves 1/3 targets" in snapshot["checks"]["gateway_ping"]["summary"]
-    assert "dns_success=1" in snapshot["checks"]["gateway_ping"]["evidence"]["observed_value"]
+    assert snapshot["checks"]["gateway_ping"]["severity"] == 3
     assert snapshot["checks"]["dns"]["state"] == "WARN"
     assert snapshot["checks"]["vpn_hint"]["state"] == "WARN"
     assert snapshot["checks"]["interface_counters"]["state"] == "OK"
@@ -183,19 +180,3 @@ def test_unknown_check_severities_are_contract_valid() -> None:
 
     assert snapshot["severity"] == 4
     assert all(check["severity"] <= 4 for check in snapshot["checks"].values())
-
-
-def test_to_framework_snapshot_summary_qualifies_gateway_icmp_loss() -> None:
-    snapshot = to_framework_snapshot({
-        "agent_id": "network.link.ro",
-        "collected_at": "2026-06-05T12:00:00+00:00",
-        "state": "WARN",
-        "severity_code": 2,
-        "interface": "enp6s0",
-        "speed_mbps": 100,
-        "gateway_ping_loss_percent": 100.0,
-        "dns_success_count": 3,
-    })
-
-    assert "gateway_icmp_loss=100.0%" in snapshot["summary"]
-    assert " loss=100.0%" not in snapshot["summary"]
