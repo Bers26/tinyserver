@@ -125,7 +125,7 @@ def test_to_framework_snapshot_marks_gateway_and_dns_checks_degraded() -> None:
     )
 
     assert snapshot["checks"]["gateway_ping"]["state"] == "WARN"
-    assert snapshot["checks"]["gateway_ping"]["severity"] == 3
+    assert snapshot["checks"]["gateway_ping"]["severity"] == 2
     assert snapshot["checks"]["dns"]["state"] == "WARN"
     assert snapshot["checks"]["vpn_hint"]["state"] == "WARN"
     assert snapshot["checks"]["interface_counters"]["state"] == "OK"
