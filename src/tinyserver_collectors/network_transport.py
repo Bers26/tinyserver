@@ -20,13 +20,16 @@ OPERATION_STATE_CODES = {"idle": 0, "queued": 1, "running": 2, "slow": 3, "timed
 DEFAULT_SOCKS_PROXY = "socks5h://127.0.0.1:10808"
 GITHUB_API_URL = "https://api.github.com/rate_limit"
 GSTATIC_URL = "https://www.gstatic.com/generate_204"
-DNS_TARGETS = ("github.com", "ssh.github.com")
-TCP_TARGETS = (("github.com", 443), ("ssh.github.com", 443))
+TELEGRAM_API_URL = "https://api.telegram.org/"
+DNS_TARGETS = ("github.com", "ssh.github.com", "api.telegram.org")
+TCP_TARGETS = (("github.com", 443), ("ssh.github.com", 443), ("api.telegram.org", 443))
 HTTPS_TARGETS = (
     ("direct_github_api", GITHUB_API_URL, None),
     ("socks_github_api", GITHUB_API_URL, "socks"),
     ("direct_gstatic", GSTATIC_URL, None),
     ("socks_gstatic", GSTATIC_URL, "socks"),
+    ("direct_telegram_api", TELEGRAM_API_URL, None),
+    ("socks_telegram_api", TELEGRAM_API_URL, "socks"),
 )
 RU_GOV_TARGETS = (
     "gosuslugi.ru",
@@ -44,14 +47,20 @@ REQUIRED_OUTPUT_FIELDS = (
     "direct_github_api_ok_value", "socks_github_api_ok", "socks_github_api_ok_value",
     "direct_gstatic_ok", "direct_gstatic_ok_value", "socks_gstatic_ok",
     "socks_gstatic_ok_value", "socks_port_alive", "socks_port_alive_value",
+    "direct_telegram_api_ok", "direct_telegram_api_ok_value",
+    "socks_telegram_api_ok", "socks_telegram_api_ok_value",
     "dns_github_ok", "dns_github_ok_value", "dns_ssh_github_ok",
-    "dns_ssh_github_ok_value", "tcp_github_443_ok", "tcp_github_443_ok_value",
+    "dns_ssh_github_ok_value", "dns_telegram_ok", "dns_telegram_ok_value",
+    "tcp_github_443_ok", "tcp_github_443_ok_value",
     "tcp_ssh_github_443_ok", "tcp_ssh_github_443_ok_value",
+    "tcp_telegram_443_ok", "tcp_telegram_443_ok_value",
     "socks_ssh_github_443_ok", "socks_ssh_github_443_ok_value",
     "git_transport_ok", "git_transport_ok_value", "git_transport_state",
     "direct_github_http_code", "socks_github_http_code", "direct_gstatic_http_code",
     "socks_gstatic_http_code", "direct_github_time_ms", "socks_github_time_ms",
     "direct_gstatic_time_ms", "socks_gstatic_time_ms", "transport_success_count",
+    "direct_telegram_http_code", "socks_telegram_http_code",
+    "direct_telegram_time_ms", "socks_telegram_time_ms",
     "transport_checked_count", "failed_targets", "likely_failure_layer", "burst",
     "transport_hint", "ru_gov_targets", "ru_gov_checked_count", "ru_gov_reachable_count",
     "ru_gov_success_rate", "ru_gov_direct_route_count", "ru_gov_vpn_leak_count",
@@ -132,6 +141,7 @@ def _target_key(prefix: str, host: str, port: int | None = None) -> str:
     host_labels = {
         "github.com": "github",
         "ssh.github.com": "ssh_github",
+        "api.telegram.org": "telegram",
     }
     normalized_host = host_labels.get(host, host.replace(".", "_").replace("-", "_"))
     if port is None:
@@ -359,9 +369,9 @@ def _likely_failure_layer(facts: Mapping[str, Any]) -> str:
         for stats in burst.values()
     ):
         return "mixed_flapping"
-    if as_bool(facts.get("dns_github_ok")) is False or as_bool(facts.get("dns_ssh_github_ok")) is False:
+    if any(as_bool(facts.get(key)) is False for key in ("dns_github_ok", "dns_ssh_github_ok", "dns_telegram_ok")):
         return "dns"
-    if as_bool(facts.get("tcp_github_443_ok")) is False or as_bool(facts.get("tcp_ssh_github_443_ok")) is False:
+    if any(as_bool(facts.get(key)) is False for key in ("tcp_github_443_ok", "tcp_ssh_github_443_ok", "tcp_telegram_443_ok")):
         return "tcp_direct"
     if as_bool(facts.get("socks_port_alive")) is False or as_bool(facts.get("socks_ssh_github_443_ok")) is False:
         return "socks_proxy"
@@ -370,6 +380,8 @@ def _likely_failure_layer(facts: Mapping[str, Any]) -> str:
         as_bool(facts.get("socks_github_api_ok")),
         as_bool(facts.get("direct_gstatic_ok")),
         as_bool(facts.get("socks_gstatic_ok")),
+        as_bool(facts.get("direct_telegram_api_ok")),
+        as_bool(facts.get("socks_telegram_api_ok")),
     )
     if any(value is False for value in https_values):
         return "https"
@@ -513,16 +525,20 @@ def build_snapshot(facts: Mapping[str, Any], collected_at: str | None = None) ->
 
     bool_keys = (
         "direct_github_api_ok", "socks_github_api_ok", "direct_gstatic_ok", "socks_gstatic_ok",
+        "direct_telegram_api_ok", "socks_telegram_api_ok",
         "socks_port_alive", "dns_github_ok", "dns_ssh_github_ok", "tcp_github_443_ok",
-        "tcp_ssh_github_443_ok", "socks_ssh_github_443_ok", "git_transport_ok",
+        "dns_telegram_ok", "tcp_ssh_github_443_ok", "tcp_telegram_443_ok",
+        "socks_ssh_github_443_ok", "git_transport_ok",
     )
     for key in bool_keys:
         snapshot[f"{key}_value"] = bool_value(snapshot.get(key))
 
     checked_keys = (
         "dns_github_ok", "dns_ssh_github_ok", "tcp_github_443_ok", "tcp_ssh_github_443_ok",
+        "dns_telegram_ok", "tcp_telegram_443_ok",
         "socks_port_alive", "socks_ssh_github_443_ok", "direct_github_api_ok", "socks_github_api_ok",
-        "direct_gstatic_ok", "socks_gstatic_ok", "git_transport_ok",
+        "direct_gstatic_ok", "socks_gstatic_ok", "direct_telegram_api_ok", "socks_telegram_api_ok",
+        "git_transport_ok",
     )
     snapshot.setdefault("transport_checked_count", sum(1 for key in checked_keys if as_bool(snapshot.get(key)) is not None))
     snapshot.setdefault("transport_success_count", sum(1 for key in checked_keys if as_bool(snapshot.get(key)) is True))
@@ -545,6 +561,10 @@ def build_snapshot(facts: Mapping[str, Any], collected_at: str | None = None) ->
         "socks_github_http_code": None, "direct_gstatic_http_code": None, "socks_gstatic_http_code": None,
         "direct_github_time_ms": None, "socks_github_time_ms": None, "direct_gstatic_time_ms": None,
         "socks_gstatic_time_ms": None,
+        "direct_telegram_api_ok": None, "socks_telegram_api_ok": None,
+        "dns_telegram_ok": None, "tcp_telegram_443_ok": None,
+        "direct_telegram_http_code": None, "socks_telegram_http_code": None,
+        "direct_telegram_time_ms": None, "socks_telegram_time_ms": None,
     }
     for key, value in defaults.items():
         snapshot.setdefault(key, value)
@@ -677,8 +697,10 @@ def collect_network_transport(
 
         split_checked_keys = (
             "dns_github_ok", "dns_ssh_github_ok", "tcp_github_443_ok", "tcp_ssh_github_443_ok",
+            "dns_telegram_ok", "tcp_telegram_443_ok",
             "socks_port_alive", "socks_ssh_github_443_ok", "direct_github_api_ok", "socks_github_api_ok",
-            "direct_gstatic_ok", "socks_gstatic_ok", "git_transport_ok",
+            "direct_gstatic_ok", "socks_gstatic_ok", "direct_telegram_api_ok", "socks_telegram_api_ok",
+            "git_transport_ok",
         )
         facts["transport_checked_count"] = sum(
             1 for key in split_checked_keys if as_bool(facts.get(key)) is not None
@@ -696,6 +718,7 @@ def collect_network_transport(
             as_bool(facts.get(key)) is True
             for key in (
                 "direct_github_api_ok", "socks_github_api_ok", "direct_gstatic_ok", "socks_gstatic_ok",
+                "direct_telegram_api_ok", "socks_telegram_api_ok",
                 "tcp_github_443_ok", "tcp_ssh_github_443_ok", "socks_ssh_github_443_ok",
             )
         ) else "transport_unavailable"

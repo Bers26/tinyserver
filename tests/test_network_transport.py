@@ -53,19 +53,25 @@ def responses(
     socks_github: CommandResult,
     direct_gstatic: CommandResult,
     socks_gstatic: CommandResult,
+    direct_telegram: CommandResult = CommandResult(0, "302 0.105000"),
+    socks_telegram: CommandResult = CommandResult(0, "302 0.106000"),
 ) -> dict[str, CommandResult]:
     ok = CommandResult(0, "ok\n")
     return {
         "dns:github.com": ok,
         "dns:ssh.github.com": ok,
+        "dns:api.telegram.org": ok,
         "tcp:github.com:443": ok,
         "tcp:ssh.github.com:443": ok,
+        "tcp:api.telegram.org:443": ok,
         "tcp:127.0.0.1:10808": ok,
         "socks-target:ssh.github.com:443": ok,
         "direct:https://api.github.com/rate_limit": direct_github,
         "socks:https://api.github.com/rate_limit": socks_github,
         "direct:https://www.gstatic.com/generate_204": direct_gstatic,
         "socks:https://www.gstatic.com/generate_204": socks_gstatic,
+        "direct:https://api.telegram.org/": direct_telegram,
+        "socks:https://api.telegram.org/": socks_telegram,
     }
 
 
@@ -169,8 +175,12 @@ def test_collect_network_transport_ok_with_fake_runner() -> None:
     assert snapshot["socks_gstatic_http_code"] == 204
     assert snapshot["socks_github_time_ms"] == 111.0
     assert snapshot["socks_gstatic_time_ms"] == 222.0
-    assert snapshot["transport_success_count"] == 8
-    assert snapshot["transport_checked_count"] == 10
+    assert snapshot["direct_telegram_api_ok_value"] == BOOL_TRUE
+    assert snapshot["socks_telegram_api_ok_value"] == BOOL_TRUE
+    assert snapshot["direct_telegram_http_code"] == 302
+    assert snapshot["socks_telegram_http_code"] == 302
+    assert snapshot["transport_success_count"] == 12
+    assert snapshot["transport_checked_count"] == 14
     assert all(timeout == 3 for _, timeout in runner.calls)
     assert any(call[0][0] == "curl" for call in runner.calls)
     assert any(call[0][0] == "getent" for call in runner.calls)
@@ -286,9 +296,31 @@ def test_v02_all_ok_without_git_probe_is_ok_and_git_disabled() -> None:
     assert snapshot["state"] == "OK"
     assert snapshot["git_transport_state"] == "disabled"
     assert snapshot["git_transport_ok_value"] == BOOL_UNKNOWN
-    assert snapshot["transport_success_count"] == 10
-    assert snapshot["transport_checked_count"] == 10
+    assert snapshot["transport_success_count"] == 14
+    assert snapshot["transport_checked_count"] == 14
     assert snapshot["failed_targets"] == []
+
+
+def test_telegram_failures_participate_in_failure_classification() -> None:
+    runner = FakeRunner(
+        responses(
+            direct_github=CommandResult(0, "200 0.101000"),
+            socks_github=CommandResult(0, "200 0.102000"),
+            direct_gstatic=CommandResult(0, "204 0.103000"),
+            socks_gstatic=CommandResult(0, "204 0.104000"),
+            direct_telegram=CommandResult(28, "000 0.000000"),
+            socks_telegram=CommandResult(28, "000 0.000000"),
+        )
+    )
+
+    snapshot = collect_network_transport(runner, timeout=3, collected_at="2026-06-03T12:00:00+00:00")
+
+    assert snapshot["state"] == "WARN"
+    assert snapshot["likely_failure_layer"] == "https"
+    assert "direct_telegram_api" in snapshot["failed_targets"]
+    assert "socks_telegram_api" in snapshot["failed_targets"]
+    assert snapshot["transport_success_count"] == 12
+    assert snapshot["transport_checked_count"] == 14
 
 
 def ru_gov_responses(*, https: CommandResult, route_dev: str) -> dict[str, CommandResult]:

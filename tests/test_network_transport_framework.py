@@ -14,6 +14,10 @@ def test_to_framework_snapshot_adds_required_contract_fields() -> None:
             "socks_github_api_ok_value": 0,
             "direct_gstatic_ok_value": 1,
             "socks_gstatic_ok_value": 0,
+            "dns_telegram_ok_value": 1,
+            "tcp_telegram_443_ok_value": 1,
+            "direct_telegram_api_ok_value": 1,
+            "socks_telegram_api_ok_value": 1,
             "socks_port_alive_value": 1,
             "direct_github_http_code": 200,
             "socks_github_http_code": 0,
@@ -23,6 +27,10 @@ def test_to_framework_snapshot_adds_required_contract_fields() -> None:
             "socks_github_time_ms": 0.0,
             "direct_gstatic_time_ms": 55.5,
             "socks_gstatic_time_ms": 0.0,
+            "direct_telegram_http_code": 302,
+            "socks_telegram_http_code": 302,
+            "direct_telegram_time_ms": 75.0,
+            "socks_telegram_time_ms": 80.0,
             "transport_success_count": 2,
             "transport_checked_count": 4,
             "freshness_code": 0,
@@ -46,10 +54,13 @@ def test_to_framework_snapshot_adds_required_contract_fields() -> None:
         "ru_gov_reachability",
         "ru_gov_route_policy",
         "socks_proxy",
+        "telegram_api",
         "transport_path",
     ]
     assert snapshot["metrics"]["direct_github_api_ok_value"] == 1
     assert snapshot["metrics"]["direct_github_time_ms"] == 101.0
+    assert snapshot["metrics"]["dns_telegram_ok_value"] == 1
+    assert snapshot["metrics"]["direct_telegram_http_code"] == 302
     assert snapshot["metrics"]["transport_success_count"] == 2
 
 
@@ -80,6 +91,30 @@ def test_to_framework_snapshot_marks_partial_transport_warn() -> None:
     assert snapshot["checks"]["gstatic"]["state"] == "BAD"
     assert snapshot["checks"]["socks_proxy"]["state"] == "WARN"
     assert snapshot["checks"]["transport_path"]["state"] == "WARN"
+
+
+def test_to_framework_snapshot_exposes_telegram_failure() -> None:
+    snapshot = to_framework_snapshot(
+        {
+            "collected_at": "2026-08-21T00:00:00+00:00",
+            "state": "WARN",
+            "severity_code": 3,
+            "dns_telegram_ok_value": 1,
+            "tcp_telegram_443_ok_value": 1,
+            "direct_telegram_api_ok_value": 0,
+            "socks_telegram_api_ok_value": 0,
+            "direct_telegram_http_code": 503,
+            "socks_telegram_http_code": 0,
+            "direct_telegram_time_ms": 100.0,
+            "socks_telegram_time_ms": 0.0,
+            "transport_success_count": 2,
+            "transport_checked_count": 4,
+        }
+    )
+
+    assert snapshot["checks"]["telegram_api"]["state"] == "BAD"
+    assert snapshot["metrics"]["tcp_telegram_443_ok_value"] == 1
+    assert snapshot["metrics"]["socks_telegram_time_ms"] == 0.0
 
 
 def test_to_framework_snapshot_clamps_unknown_state_and_severity() -> None:
