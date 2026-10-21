@@ -18,18 +18,17 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def parse_apcupsd_text(text: str) -> dict[str, str]:
+def parse_nut_text(text: str) -> dict[str, str]:
+    """Parse key: value lines from upsc; ignore malformed/unrecognised lines."""
     data: dict[str, str] = {}
     for line in text.splitlines():
         if ":" not in line:
             continue
         key, value = line.split(":", 1)
-        key = key.strip().upper()
-        value = value.strip()
-        if key:
-            data[key] = value
+        key = key.strip().lower()
+        if re.fullmatch(r"[a-z][a-z0-9_.-]{1,100}", key):
+            data[key] = value.strip()
     return data
-
 
 
 def parse_systemctl_show(text: str) -> dict[str, str]:
@@ -88,39 +87,48 @@ def _first_number(value: str | None) -> float | None:
 
 
 def _status(data: Mapping[str, str]) -> str:
-    return str(data.get("STATUS") or "").strip().upper()
+    return str(data.get("ups.status") or "").strip().upper()
 
 
-def classify_power(data: Mapping[str, str]) -> tuple[str, int, str, int]:
-    status = _status(data)
-    if not status:
-        return "UNKNOWN", STATE_CODES["UNKNOWN"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]
-    if "ONLINE" in status:
-        return "OK", STATE_CODES["OK"], "normal", SEVERITY_CODES["normal"]
-    if "ONBATT" in status or "LOWBATT" in status:
-        return "WARN", STATE_CODES["WARN"], "degraded", SEVERITY_CODES["degraded"]
-    if "COMMLOST" in status or "SHUTTING" in status:
+def classify_power(data: Mapping[str, str], error_class: str = "ok") -> tuple[str, int, str, int]:
+    if error_class == "data_stale":
+        return "STALE", STATE_CODES["STALE"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]
+    flags = set(_status(data).split())
+    if flags & {"LB", "FSD", "OFF", "ALARM"}:
         return "BAD", STATE_CODES["BAD"], "critical", SEVERITY_CODES["critical"]
+    if flags & {"OB", "RB"}:
+        return "WARN", STATE_CODES["WARN"], "degraded", SEVERITY_CODES["degraded"]
+    if "OL" in flags:
+        return "OK", STATE_CODES["OK"], "normal", SEVERITY_CODES["normal"]
     return "UNKNOWN", STATE_CODES["UNKNOWN"], "unknown_or_error", SEVERITY_CODES["unknown_or_error"]
 
 
-def metrics_from_apcupsd(data: Mapping[str, str], *, freshness_code: int = 0, operation_state_code: int = 6) -> dict[str, int | float]:
+def metrics_from_nut(data: Mapping[str, str], *, freshness_code: int = 0, operation_state_code: int = 6) -> dict[str, int | float]:
+    import math
+
     metrics: dict[str, int | float] = {
         "freshness_code": freshness_code,
         "operation_state_code": operation_state_code,
     }
     mapping = {
-        "battery_percent": "BCHARGE",
-        "runtime_min": "TIMELEFT",
-        "input_voltage": "LINEV",
-        "output_voltage": "OUTPUTV",
-        "temperature_c": "ITEMP",
-        "load_percent": "LOADPCT",
+        "battery_percent": "battery.charge",
+        "runtime_min": "battery.runtime",
+        "input_voltage": "input.voltage",
+        "output_voltage": "output.voltage",
+        "temperature_c": "ups.temperature",
+        "load_percent": "ups.load",
     }
-    for metric_key, source_key in mapping.items():
-        value = _first_number(data.get(source_key))
-        if value is not None:
-            metrics[metric_key] = value
+    for key, nut_key in mapping.items():
+        value = data.get(nut_key)
+        if value is None:
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(number) or number < 0:
+            continue
+        metrics[key] = number / 60 if key == "runtime_min" else number
     return metrics
 
 
@@ -134,19 +142,28 @@ def run_command(args: list[str], timeout_sec: int = 5) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout, proc.stderr
 
 
-def run_apcaccess(timeout_sec: int = 5) -> tuple[int, str, str]:
-    return run_command(["apcaccess", "status"], timeout_sec=timeout_sec)
+def run_upsc(timeout_sec: int = 5) -> tuple[int, str, str]:
+    """Discover the UPS and perform only NUT read operations."""
+    rc, out, err = run_command(["upsc", "-l", "localhost"], timeout_sec=timeout_sec)
+    if rc != 0:
+        return rc, out, err
+    devices = [line.strip() for line in out.splitlines()
+               if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", line.strip())]
+    if not devices:
+        return 1, "", "no NUT UPS discovered"
+    if "apc" in devices:
+        name = "apc"
+    elif len(devices) == 1:
+        name = devices[0]
+    else:
+        return 1, "", "multiple NUT UPS: selection ambiguous"
+    return run_command(["upsc", f"{name}@localhost"], timeout_sec=timeout_sec)
 
 
-def run_systemctl_show_apcupsd(timeout_sec: int = 5) -> tuple[int, str, str]:
+def run_systemctl_show_nut(timeout_sec: int = 5) -> tuple[int, str, str]:
     return run_command(
-        [
-            "systemctl",
-            "show",
-            "apcupsd.service",
-            "--no-page",
-            "--property=ActiveState,SubState,MainPID,TasksCurrent,LimitNOFILE",
-        ],
+        ["systemctl", "show", "nut-server.service", "--no-pager",
+         "--property=ActiveState,SubState,MainPID,TasksCurrent,LimitNOFILE"],
         timeout_sec=timeout_sec,
     )
 
@@ -177,173 +194,155 @@ def _read_proc_limits(pid: int | None) -> dict[str, int | None]:
         return {"limit_nofile_soft": None, "limit_nofile_hard": None}
 
 
-def collect_apcupsd_service_status() -> dict[str, Any]:
-    rc, stdout, stderr = run_systemctl_show_apcupsd()
+def collect_nut_service_status() -> dict[str, Any]:
+    rc, stdout, stderr = run_systemctl_show_nut()
     show = parse_systemctl_show(stdout)
-    main_pid = _int_or_none(show.get("MainPID"))
-    limits = _read_proc_limits(main_pid)
-    fd_info = safe_fd_count(main_pid)
-    soft_limit = limits["limit_nofile_soft"]
-    fd_usage_ratio = None
-    if fd_info["fd_count"] is not None and soft_limit and soft_limit > 0:
-        fd_usage_ratio = fd_info["fd_count"] / soft_limit
+    pid = _int_or_none(show.get("MainPID"))
+    limits = _read_proc_limits(pid)
+    fd_info = safe_fd_count(pid)
+    soft = limits["limit_nofile_soft"]
+    ratio = fd_info["fd_count"] / soft if fd_info["fd_count"] is not None and soft and soft > 0 else None
     return {
         "active_state": show.get("ActiveState") or "unknown",
         "sub_state": show.get("SubState") or "unknown",
-        "main_pid": main_pid,
+        "main_pid": pid,
         "tasks_current": _int_or_none(show.get("TasksCurrent")),
         "limit_nofile_systemd": _int_or_none(show.get("LimitNOFILE")),
-        "limit_nofile_soft": soft_limit,
+        "limit_nofile_soft": soft,
         "limit_nofile_hard": limits["limit_nofile_hard"],
         "fd_count_available": fd_info["fd_count_available"],
         "fd_count": fd_info["fd_count"],
         "fd_count_error": fd_info["fd_count_error"],
-        "fd_usage_ratio": fd_usage_ratio,
+        "fd_usage_ratio": ratio,
         "command_rc": rc,
         "command_error": stderr.strip(),
     }
 
 
-def classify_apcaccess_error(rc: int, stdout: str = "", stderr: str = "") -> str:
+def classify_upsc_error(rc: int, stdout: str = "", stderr: str = "") -> str:
+    message = (str(stdout) + "\n" + str(stderr)).lower()
+    if "data-stale" in message or "data stale" in message:
+        return "data_stale"
+    if "driver-not-connected" in message or "driver not connected" in message:
+        return "driver_disconnected"
     if rc == 0:
-        return "ok"
-    text = (stdout + "\n" + stderr).lower()
-    if rc == 124 or "timeout" in text or "timed out" in text:
+        return "ok" if stdout.strip() else "empty_output"
+    if rc == 124 or "timeout" in message or "timed out" in message:
         return "timeout"
-    if rc == 127 or "not found" in text or "no such file" in text:
+    if rc == 127 or "not found" in message or "no such file" in message:
         return "command_not_found"
-    if "connection reset by peer" in text:
+    if "connection reset" in message:
         return "connection_reset"
-    if "permission denied" in text or "operation not permitted" in text:
+    if "permission denied" in message:
         return "permission_denied"
-    if "connection refused" in text or "unavailable" in text:
+    if "connection refused" in message or "unavailable" in message:
         return "unavailable"
     return "command_failed"
 
 
-def build_diagnosis_layer(command: Mapping[str, Any], service: Mapping[str, Any], apcupsd: Mapping[str, str]) -> dict[str, Any]:
-    apcaccess_ok = command.get("apcaccess_ok") is True
+def build_diagnosis_layer(command: Mapping[str, Any], service: Mapping[str, Any], nut: Mapping[str, str]) -> dict[str, Any]:
+    status = _status(nut)
     error_class = str(command.get("command_error_class") or "unknown")
-    active_state = str(service.get("active_state") or "unknown")
-    sub_state = str(service.get("sub_state") or "unknown")
-    tasks_current = _int_or_none(service.get("tasks_current"))
-    fd_count = _int_or_none(service.get("fd_count"))
-    soft_limit = _int_or_none(service.get("limit_nofile_soft"))
-    fd_ratio = service.get("fd_usage_ratio")
-    status = _status(apcupsd)
-
-    if apcaccess_ok and apcupsd:
+    active = str(service.get("active_state") or "unknown")
+    ratio = service.get("fd_usage_ratio")
+    tasks = _int_or_none(service.get("tasks_current"))
+    if error_class == "data_stale":
         return {
-            "likely_layer": "ups_hardware",
-            "reason": f"apcupsd/apcaccess telemetry is valid and UPS reports {status or 'UNKNOWN'}.",
-            "confidence": "high" if status else "medium",
-            "next_read_only_check": "Compare STATUS, BCHARGE, TIMELEFT, LINEV and LOADPCT from apcaccess.",
+            "likely_layer": "driver", "confidence": "high",
+            "reason": "NUT reports DATA-STALE; driver telemetry is not fresh, not evidence of UPS hardware failure.",
+            "next_read_only_check": "Inspect upsc status and NUT driver/unit logs without restarting anything.",
         }
-
-    service_running = active_state == "active" and sub_state == "running"
-    fd_near_limit = isinstance(fd_ratio, (int, float)) and fd_ratio >= 0.95
-    tasks_near_limit = tasks_current is not None and tasks_current >= 900
-    if service_running and (error_class == "connection_reset" or fd_near_limit or tasks_near_limit):
-        evidence = []
-        if error_class == "connection_reset":
-            evidence.append("apcaccess connection reset by peer")
-        if fd_near_limit:
-            evidence.append(f"apcupsd fd usage {fd_count}/{soft_limit}")
-        if tasks_near_limit:
-            evidence.append(f"apcupsd tasks_current={tasks_current}")
+    if error_class == "driver_disconnected":
         return {
-            "likely_layer": "service",
-            "reason": "apcupsd service-layer failure: " + ", ".join(evidence) + ".",
-            "confidence": "high",
-            "next_read_only_check": "Read systemctl show apcupsd.service plus /proc/<MainPID>/limits and /proc/<MainPID>/fd.",
+            "likely_layer": "driver", "confidence": "high",
+            "reason": "NUT reports DRIVER-NOT-CONNECTED.",
+            "next_read_only_check": "Inspect USB connection and NUT driver service state read-only.",
         }
-
-    if active_state in {"failed", "inactive"}:
+    if active in {"failed", "inactive"}:
         return {
-            "likely_layer": "service",
-            "reason": f"apcupsd service is not running: active_state={active_state}, sub_state={sub_state}.",
-            "confidence": "high",
-            "next_read_only_check": "Read systemctl show apcupsd.service state fields.",
+            "likely_layer": "service", "confidence": "high",
+            "reason": f"nut-server.service is not running: active_state={active}.",
+            "next_read_only_check": "Inspect nut-server.service and its recent journal.",
         }
-
-    if error_class in {"command_not_found", "timeout", "permission_denied", "command_failed"}:
+    if (isinstance(ratio, (int, float)) and ratio >= 0.95) or (tasks is not None and tasks >= 900):
         return {
-            "likely_layer": "command",
-            "reason": f"apcaccess command failed with class={error_class}.",
-            "confidence": "medium",
-            "next_read_only_check": "Run read-only apcaccess status probe and capture rc/stdout/stderr.",
+            "likely_layer": "service", "confidence": "high",
+            "reason": f"NUT service resource pressure: fd_ratio={ratio}, tasks_current={tasks}.",
+            "next_read_only_check": "Inspect nut-server process fd count, limits and tasks.",
         }
-
+    if command.get("upsc_ok") is True and status:
+        return {
+            "likely_layer": "ups_hardware", "confidence": "high",
+            "reason": f"NUT fresh telemetry reports UPS status {status}.",
+            "next_read_only_check": "Compare ups.status, battery.charge and battery.runtime from upsc.",
+        }
+    if error_class in {"timeout", "connection_reset", "unavailable"}:
+        return {
+            "likely_layer": "transport", "confidence": "medium",
+            "reason": f"NUT read failed: {error_class}; UPS hardware state unknown.",
+            "next_read_only_check": "Inspect NUT socket and driver status read-only.",
+        }
     return {
-        "likely_layer": "unavailable",
-        "reason": f"Unable to classify power telemetry: apcaccess class={error_class}, service active_state={active_state}.",
-        "confidence": "low",
-        "next_read_only_check": "Collect apcaccess rc/stdout/stderr and systemctl show apcupsd.service.",
+        "likely_layer": "command", "confidence": "medium",
+        "reason": f"Unable to obtain valid NUT telemetry: {error_class}.",
+        "next_read_only_check": "Run upsc -l localhost and upsc apc@localhost read-only.",
     }
 
 
+
 def collect_power_status(text: str | None = None, service_status: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Read-only NUT collector. Text injection is for deterministic offline tests."""
     collected_at = utc_now_iso()
     if text is None:
-        rc, stdout, stderr = run_apcaccess()
-        source = "apcaccess status"
+        command_rc, stdout, stderr = run_upsc()
+        source = "upsc NUT localhost"
         source_type = "command"
-        command_rc = rc
+        data = parse_nut_text(stdout) if command_rc == 0 else {}
         command_error = stderr.strip()
-        command_stdout = stdout
-        data = parse_apcupsd_text(stdout) if rc == 0 else {}
     else:
-        source = "apcupsd text"
+        source = "NUT provided text"
         source_type = "provided_text"
-        command_rc = 0
-        command_error = ""
-        command_stdout = text
-        data = parse_apcupsd_text(text)
+        command_rc, stdout, command_error = 0, text, ""
+        data = parse_nut_text(text)
 
-    command_error_class = classify_apcaccess_error(command_rc, command_stdout, command_error)
+    error_class = classify_upsc_error(command_rc, stdout, command_error)
+    status = _status(data)
+    if error_class == "ok" and not status:
+        error_class = "invalid_status"
     command = {
-        "apcaccess_ok": command_rc == 0 and bool(data),
+        "upsc_ok": error_class == "ok" and bool(status),
         "command_rc": command_rc,
         "command_error": command_error,
-        "command_error_class": command_error_class,
+        "command_error_class": error_class,
     }
     if service_status is not None:
         service = dict(service_status)
     elif text is None:
-        service = collect_apcupsd_service_status()
+        service = collect_nut_service_status()
     else:
         service = _empty_service_status()
-    diagnosis_layer = build_diagnosis_layer(command, service, data)
-
-    state, state_code, severity, severity_code = classify_power(data)
-    freshness_code = FRESHNESS_CODES["fresh"] if data else FRESHNESS_CODES["unknown"]
-    operation_state_code = OPERATION_STATE_CODES["completed"] if data else OPERATION_STATE_CODES["unknown"]
-    status = _status(data) or "UNKNOWN"
+    state, state_code, severity, severity_code = classify_power(data, error_class)
+    freshness = "stale" if error_class == "data_stale" else "fresh" if command["upsc_ok"] else "unknown"
+    freshness_code = FRESHNESS_CODES[freshness]
+    operation = "completed" if command["upsc_ok"] else "unknown"
+    operation_code = OPERATION_STATE_CODES[operation]
+    diagnosis = build_diagnosis_layer(command, service, data)
     return {
         "agent_id": "power.status.ro",
         "collected_at": collected_at,
-        "provider": "apcupsd/apcaccess",
-        "source": source,
-        "source_type": source_type,
-        "command": command,
-        "command_rc": command_rc,
-        "command_error": command_error,
-        "command_error_class": command_error_class,
-        "service": service,
-        "diagnosis_layer": diagnosis_layer,
-        "apcupsd": dict(data),
-        "state": state,
-        "state_code": state_code,
-        "severity": severity,
-        "severity_code": severity_code,
-        "summary": f"Power source status: {status}",
-        "freshness": "fresh" if data else "unknown",
-        "freshness_code": freshness_code,
-        "operation_state": "completed" if data else "unknown",
-        "operation_state_code": operation_state_code,
-        "metrics": metrics_from_apcupsd(
-            data,
-            freshness_code=freshness_code,
-            operation_state_code=operation_state_code,
+        "provider": "nut/upsc",
+        "source": source, "source_type": source_type,
+        "command": command, "command_rc": command_rc,
+        "command_error": command_error, "command_error_class": error_class,
+        "service": service, "diagnosis_layer": diagnosis,
+        "nut": dict(data),
+        "state": state, "state_code": state_code,
+        "severity": severity, "severity_code": severity_code,
+        "summary": f"UPS status via NUT: {status or error_class.upper()}",
+        "freshness": freshness, "freshness_code": freshness_code,
+        "source_freshness": "nut_driver_live" if freshness == "fresh" else freshness,
+        "operation_state": operation, "operation_state_code": operation_code,
+        "metrics": metrics_from_nut(
+            data, freshness_code=freshness_code, operation_state_code=operation_code
         ),
     }
